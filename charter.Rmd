@@ -1,5 +1,6 @@
 ---
-title: "Performance: Charter School vs Public School"
+title: "Longitudinal study of factors influencing student academic performance in CA schools"
+author: "STAT 420, Summer 2018, bching3, cindyst2, rjs8, trapido2"
 output: html_document
 ---
 
@@ -9,7 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r eval=FALSE}
 install.packages("foreign")
-#setwd("~/Documents/Urbana Champaign/stats420 R/Education")
 ```
 
 ## Dataset Description
@@ -29,15 +29,14 @@ Interest in this dataset is driven by the current administration's Education Sec
 ## Proof of Loading the Dataset into R
 ```{r}
 library(foreign)
-school = read.dbf("api13gdb.dbf")
-#str(school)
-# all fields got read as Factor; need to convert some of them back to numbers
-#colnames(school)
+school = read.dbf("data/apiB12db.dbf")
 ```
 
 ```{r}
-charter = subset(school, CHARTER %in% c('D','Y'), select=c(VCST_E91,VCSTM2_91,VCHS_E,st_rank,FULL,EMER,TESTED,AVG_ED,ACS_CORE,ACS_46))
-public = subset(school, !(CHARTER %in% c('D','Y')), select=c(VCST_E91,VCSTM2_91,VCHS_E,st_rank,FULL,EMER,TESTED,AVG_ED,ACS_CORE,ACS_46))
+charter = subset(school, CHARTER %in% c('D','Y'), 
+          select=c(VCST_E91, VCST_M91, VCHS_E91, VCHS_M91,  ST_RANK, FULL, EMER, TESTED, AVG_ED, ACS_CORE,ACS_46))
+public = subset(school, !(CHARTER %in% c('D','Y')), 
+          select=c(VCST_E91, VCST_M91, VCHS_E91, VCHS_M91,  ST_RANK, FULL, EMER, TESTED, AVG_ED, ACS_CORE,ACS_46))
 nrow(charter)
 nrow(public)
 head(charter)
@@ -49,8 +48,8 @@ head(public)
 - Split data into charter and non-charter.
 - Fit models with performance as a response for both.
 - Check normality assumptions.
-- Plot performance over time: 2013, 2012, 2011
 - Responses: english score, math score, science score, exit exam score, state rank
 - Factors: parental education, class size, teacher with full credentials, teacher with emergency credentials, student race, district, county
 - Study should answer which factors are most relevant to performance, and the differences in those factors between charter schools and public schools
+- Plot a longtitude study of how these factors affect the response change over time
 
