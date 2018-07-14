@@ -1,0 +1,56 @@
+---
+title: "Performance: Charter School vs Public School"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+install.packages("foreign")
+#setwd("~/Documents/Urbana Champaign/stats420 R/Education")
+```
+
+## Dataset Description
+
+The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+
+With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+
+## Background
+
+School performance as recorded by the CA Dept. of Education from 1999-2013 (https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp)
+
+## Interest
+
+Interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools.
+
+## Proof of Loading the Dataset into R
+```{r}
+library(foreign)
+school = read.dbf("api13gdb.dbf")
+#str(school)
+# all fields got read as Factor; need to convert some of them back to numbers
+#colnames(school)
+```
+
+```{r}
+charter = subset(school, CHARTER %in% c('D','Y'), select=c(VCST_E91,VCSTM2_91,VCHS_E,st_rank,FULL,EMER,TESTED,AVG_ED,ACS_CORE,ACS_46))
+public = subset(school, !(CHARTER %in% c('D','Y')), select=c(VCST_E91,VCSTM2_91,VCHS_E,st_rank,FULL,EMER,TESTED,AVG_ED,ACS_CORE,ACS_46))
+nrow(charter)
+nrow(public)
+head(charter)
+head(public)
+```
+
+### Methodology
+
+- Split data into charter and non-charter.
+- Fit models with performance as a response for both.
+- Check normality assumptions.
+- Plot performance over time: 2013, 2012, 2011
+- Responses: english score, math score, science score, exit exam score, state rank
+- Factors: parental education, class size, teacher with full credentials, teacher with emergency credentials, student race, district, county
+- Study should answer which factors are most relevant to performance, and the differences in those factors between charter schools and public schools
+
