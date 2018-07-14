@@ -1,4 +1,4 @@
-#Longitudinal study of factors influencing student academic performance in CA schools# 
+Longitudinal study of factors influencing student academic performance in CA schools
 ======================================================================================
 - The data set we will focus on will be the base API data sets, as we will be comparing test scores across multiple schools 
 (whereas growthAPI compares a school's performance with its previous year)
