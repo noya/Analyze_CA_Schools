@@ -211,6 +211,13 @@ sum(is.na(school_gwr$FULL))
 
 sum(!is.na(school_gwr$EMER))
 sum(is.na(school_gwr$EMER))
+
+school_gwr13 = read.dbf("data/api13gdb.dbf", as.is = TRUE)
+sum(!is.na(school_gwr13$FULL))
+sum(is.na(school_gwr13$FULL))
+
+sum(!is.na(school_gwr13$EMER))
+sum(is.na(school_gwr13$EMER))
 ```
 
 ### Methodology
