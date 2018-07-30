@@ -1,0 +1,220 @@
+---
+title: "Longitudinal study of factors influencing student academic performance in CA schools"
+author: "STAT 420, Summer 2018, bching3, cindyst2, rjs8, trapido2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+install.packages("foreign")
+```
+
+## Dataset Description
+
+The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+
+With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+
+## Background
+
+School performance as recorded by the CA Dept. of Education from 1999-2013 (https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp)
+
+## Interest
+
+Interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools.
+
+## Proof of Loading the Dataset into R
+```{r}
+library(foreign)
+school = read.dbf("data/api10bdb.dbf", as.is = TRUE)
+str(school)
+```
+
+```{r}
+#################################
+# Students' Performance compared with Students' backgrounds
+#################################
+# we will only look at data at least with API scores
+school = school[!is.na(school$API10B), ]
+school$API10B = as.numeric(school$API10B)
+
+# API vs Percent of english learner
+anyNA (school$P_EL)
+school$P_EL = as.numeric(school$P_EL)
+plot( API10B ~ P_EL, data = school)
+
+# API vs Percent of gifted student
+#anyNA(school$P_DI)
+#school$P_DI = as.numeric(school$P_DI)
+anyNA(school$P_GATE)
+school$P_GATE = as.numeric(school$P_GATE)
+plot( API10B ~ P_GATE, data = school)
+
+# API vs meals
+anyNA(school$MEALS)
+school$MEALS = as.numeric(school$MEALS)
+plot( API10B ~ MEALS, data = school)
+
+# API vs Average parent education
+school$AVG_ED = as.numeric(school$AVG_ED)
+plot( API10B ~ AVG_ED, data = school)
+
+
+
+```
+```{r}
+#################################
+# Students' Performance compared with School's Statistics
+#################################
+
+# TODO: need to figure out what do the different CW_* mean -> Done
+# TODO: Need to know how did the school rank and school charac are caclulated, are they based on API => API is a dependent variable
+# TODO: ST_RANK, what is B = district or ASAM, C = special education school?
+
+# select our main predictor, charter school type
+# head(school$CHARTER)
+school$CHARTER = ifelse(is.na(school$CHARTER), "NY", school$CHARTER)
+school$CHARTER = as.factor(school$CHARTER)
+
+# do a quick check on API score with charter school type
+boxplot(API10B ~ CHARTER, data = school)
+
+
+# API vs school rank, does it depend on API?
+#school$ST_RANK = as.numeric(school$ST_RANK)
+school_norank = school[!is.na(school$ST_RANK),]
+school_norank$ST_RANK = as.factor(school_norank$ST_RANK)
+str(school_norank$ST_RANK)
+levels(school_norank$ST_RANK)
+plot( API10B ~ ST_RANK, data = school_norank )
+
+###########
+# No info 
+########
+# API vs teacher w/ full credentials
+# Skip due to no schools has the data
+sum(!is.na(school$FULL))
+sum(is.na(school$FULL))
+
+# API vs teacher emergency credentials
+sum(!is.na(school$EMER))
+sum(is.na(school$EMER))
+
+# API vs Average Class Size (Grade K3)
+sum(!is.na(school$ACS_K3))
+sum(is.na(school$ACS_K3))
+#school$ACS_K3 = as.numeric(school$ACS_K3)
+#plot(API10B ~ ACS_K3, data = school)
+
+# API vs Average Class Size (Grade K3)
+sum(!is.na(school$ACS_46))
+sum(is.na(school$ACS_46))
+#school$ACS_46 = as.numeric(school$ACS_46)
+#plot(API10B ~ ACS_46, data = school)
+
+# API vs Average Class Size (Grade K3)
+sum(!is.na(school$ACS_CORE))
+sum(is.na(school$ACS_CORE))
+#school$ACS_CORE = as.numeric(school$ACS_CORE)
+#plot(API10B ~ ACS_CORE, data = school)
+
+###########
+# End of No info 
+########
+
+# API vs school characteristic index 
+# https://www.cde.ca.gov/ta/ac/ap/documents/tdgreport0400.pdf  
+# This index largely reflect varaiblaes outside of the control of the school
+
+sum(!is.na(school$SCI))
+sum(is.na(school$SCI))
+school$SCI = as.numeric(school$SCI)
+plot( API10B ~ SCI, data = school )
+
+# API vs similar rank
+school$SIM_RANK = as.factor(school$SIM_RANK)
+plot(API10B ~ SIM_RANK, data = school)
+
+# API vs Type: 1=Unified, 2=Elementary District, 3=9-12 High District, 4=7-12 High District, E=Elementary School, M=Middle School, H=High School 
+school$STYPE = as.factor(school$STYPE)
+plot(API10B ~ STYPE, data = school)
+
+# API vs A=Alternative Schools Accountability Model (ASAM), E=Special Education, and C=Combination ASAM and Special Education, S=State Special Schools
+school$SPED = ifelse(is.na(school$SPED), 'NA', school$SPED)
+school$SPED = as.factor(school$SPED)
+plot(API10B ~ SPED, data = school)
+# https://www.cde.ca.gov/ta/ac/ap/glossary12d.asp
+# cstseng: Seems like it's only related to how much percentage the school weighs the tests
+
+###########
+# Possibly not include as predictors?
+########
+
+# API vs School content area weights percentage in CST english language arts
+school$CW_CSTE = as.numeric(school$CW_CSTE)
+plot(API10B ~ CW_CSTE, data = school)
+
+# API vs School content area weights percentage in CST math
+school$CW_CSTM = as.numeric(school$CW_CSTM)
+plot(API10B ~ CW_CSTM, data = school)
+
+# API vs School content area weights percentage in CST History Social Science
+school$CW_CSTH = as.numeric(school$CW_CSTH)
+plot(API10B ~ CW_CSTH, data = school) # inverse relationship?? :(
+
+# API vs School content area weights CW_CHSE in High school exit exam (CAHSEE) in english language arts
+school$CW_CHSE = as.numeric(school$CW_CHSE)
+plot(API10B ~ CW_CHSE, data = school)
+
+# API vs School content area weights CW_CHSE in High school exit exam (CAHSEE) in math
+school$CW_CHSM = as.numeric(school$CW_CHSM)
+plot(API10B ~ CW_CHSM, data = school)
+
+# How is CW_CSTM diffierent than CWM2_28, is it combined?
+
+```
+
+
+```{r}
+
+# We will select predictors we are interested in
+        # Engliash   Math         Science     History Social Science        
+sub_resp = c("VCST_E28", "VCST_M28", "VCST_S28", "VCST_H28",  # grade 2 ~ 8
+         "VCST_E91", "VCST_M91", "VCST_S91",  "VCST_H91", # grade 9 ~ 11
+         "VCHS_E91", "VCHS_M91")                          # high school exit exam 9 ~ 11
+
+api_resp = c("API10B", "AA_API", "AI_API", "AS_API", "FI_API", "HI_API", "PI_API", "WH_API")    
+
+# SIM_RANK
+# Need to compare AA_NUM with VALID
+st_pred = c(#"AA_SIG", "AI_SIG", "AS_SIG", "FI_SIG", "HI_SIG", "WHI_SIG", "MR_SIG",
+                  "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI", "PCT_WH", "PCT_MR",
+                  "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", 
+                  "MEALS", "AVG_ED")
+                 # "SD_SIG", "EL_SIG", "DL_SIG", , "MEALS")
+
+schl_pred = c("CHARTER", "ST_RANK", "ACS_K3", "ACS_46", "ACS_CORE", 
+              "FULL", "EMER",   # teacher's credential
+              "CW_CSTE", "CW_CSTM", "CWS_91", "CW_CSTH", "CW_CHSE", "CW_CHSM", "CW_SCI",
+              "CWM2_91", "CWS2_91", "CWM2_28", "CWM2_91", "CWS2_91") # content area weights
+
+
+```
+
+### Methodology
+
+- Split data into charter and non-charter.
+- Fit models with performance as a response for both.
+- Check normality assumptions.
+- Responses: english score, math score, science score, exit exam score, state rank
+- Factors: parental education, class size, teacher with full credentials, teacher with emergency credentials, student race, district, county
+- Study should answer which factors are most relevant to performance, and the differences in those factors between charter schools and public schools
+- Plot a longtitude study of how these factors affect the response change over time
+
+```{r}
+
+```
+
