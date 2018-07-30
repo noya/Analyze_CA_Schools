@@ -204,6 +204,15 @@ schl_pred = c("CHARTER", "ST_RANK", "ACS_K3", "ACS_46", "ACS_CORE",
 
 ```
 
+```{r}
+school_gwr = read.dbf("data/api10gdb.dbf", as.is = TRUE)
+sum(!is.na(school_gwr$FULL))
+sum(is.na(school_gwr$FULL))
+
+sum(!is.na(school_gwr$EMER))
+sum(is.na(school_gwr$EMER))
+```
+
 ### Methodology
 
 - Split data into charter and non-charter.
