@@ -57,48 +57,89 @@ We start out by looking at the data and removing any rows that have missing data
 # First get the subset that the documentation says has valid statistical data,
 # then remove the FLAG column because we don't need it anymore.
 # Also remove the other alternative responses related to growth and APIs.
-data_2013 = subset(data_2013, subset = is.na(data_2013$FLAG), select = colnames(data_2013)[!(colnames(data_2013) %in% c('FLAG','API12','TARGET','GROWTH','SCH_WIDE','COMP_IMP','BOTH'))])
+data_2013 = subset(data_2013, subset = is.na(data_2013$FLAG), select = !(colnames(data_2013) %in% c('FLAG','API12','TARGET','GROWTH','SCH_WIDE','COMP_IMP','BOTH')))
 nrow(data_2013)
 ```
 ```{r}
+#
+# Utility functions to manipulate the data.
+#
+
+# Function to remove exact column names
+remove_columns = function(dframe, columns_to_remove) {
+  subset(dframe, select = !(colnames(dframe) %in% columns_to_remove))
+}
+
+# Function to remove matching column names
+remove_columns_like = function(dframe, columns_to_remove) {
+  tmp_df = data.frame(dframe)
+  for(match in columns_to_remove) {
+    tmp_df = subset(tmp_df, select = -grep(match, colnames(tmp_df), perl=TRUE, value=FALSE))
+  }
+  tmp_df
+}
+
+# threshold is a number from 0 to 1 to indicate how much NA you want to see
+# threshold = 0.7 means show columns with 70% NAs
+show_columns_with_na = function(dframe, threshold) {
+  cn = colnames(dframe)
+  col_na_ratios = rep(0, length(cn))
+  for(c in 1:length(cn)) {
+    col_na_ratios[c] = mean(is.na(dframe[,cn[c]]))
+  }
+  print(cn[col_na_ratios > threshold])
+  cn[col_na_ratios > threshold]
+}
+```
+
+```{r remove NAs}
 # Remove all _TARG, _MET, _SIG, _API12, _API13 columns which are just metadata about whether targets were met
 # or whether columns were significant.
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_TARG", colnames(data_2013), perl=TRUE, value=FALSE)])
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_MET", colnames(data_2013), perl=TRUE, value=FALSE)])
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_SIG", colnames(data_2013), perl=TRUE, value=FALSE)])
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_API12", colnames(data_2013), perl=TRUE, value=FALSE)])
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_API13", colnames(data_2013), perl=TRUE, value=FALSE)])
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_NUM", colnames(data_2013), perl=TRUE, value=FALSE)])
-data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_GROW", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = remove_columns_like(data_2013, c("_TARG", "_MET", "_SIG", "_API12", "_API13", "_NUM", "_GROW"))
+
+# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+data_2013 = subset(data_2013, subset = is.na(data_2013$SM12) & is.na(data_2013$SM13), select = !(colnames(data_2013) %in% c('SM12','SM13')))
+
+# Remove schools with SIZE = S or T which indicate non-valid API scores
+data_2013 = subset(data_2013, subset = !(data_2013$SIZE %in% c("S","T")), select =!(colnames(data_2013) %in% c('SIZE')))
 
 # Transform CHARTER column to indicate Y or N because it uses NA to indicate a non-charter school
 data_2013$CHARTER = as.factor(ifelse(is.na(data_2013$CHARTER), "Y", "N"))
 
-# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
-data_2013 = subset(data_2013, subset = is.na(data_2013$SM12) & is.na(data_2013$SM13), select = colnames(data_2013)[!(colnames(data_2013) %in% c('SM12','SM13'))])
-
-# Remove schools with SIZE = S or T which indicate non-valid API scores
-data_2013 = subset(data_2013, subset = !is.na(data_2013$SIZE), select = colnames(data_2013)[!(colnames(data_2013) %in% c('SIZE'))])
 
 # Transform SPED column by setting NA to 'R' for regular b/c it uses NA to indicate regular schools
 data_2013$SPED = as.factor(ifelse(is.na(data_2013$SPED), "R", data_2013$SPED))
 
-# Remove columns that have > 80% NA values
-col_na_ratios = rep(0, length(colnames(data_2013)))
-for(c in 1:length(colnames(data_2013))) {
-  col_na_ratios[c] = mean(is.na(data_2013[,colnames(data_2013)[c]]))
-}
-colnames(data_2013)[col_na_ratios > 0.8]
+# Transform STYPE column by setting NA to 'O' to indicate other
+data_2013$STYPE = as.factor(ifelse(is.na(data_2013$STYPE), "O", data_2013$STYPE))
+
+# Remove the names because we have the school id in the first column
+data_2013 = remove_columns(data_2013, c("SNAME", "DNAME", "CNAME"))
+
+# Remove rows with YR_RND = Yes because they have mostly NA columns
+data_2013 = subset(data_2013, subset = data_2013$YR_RND != 'Yes', select =!(colnames(data_2013) %in% c('YR_RND')))
+
+# Remove rows with AVG_ED = NA because there's not that much of them (37)
+data_2013 = subset(data_2013, subset = !is.na(data_2013$AVG_ED))
+
+# Remove rows with st_rank and sim_rank = NA b/c there's not that much of them (1 each)
+data_2013 = subset(data_2013, subset = !is.na(data_2013$st_rank) & !is.na(data_2013$sim_rank))
+
+# Remove rows with MEDIAN13 or MEDIAN12 = NA
+data_2013 = subset(data_2013, subset = !is.na(data_2013$MEDIAN13) | !is.na(data_2013$MEDIAN12))
+
+# Iterate with any columns that have NAs: either transfrom the NA to something else, 
+# or remove the column, or remove the row.
+# Remove columns if they don't look like they're needed according to this dataset's record layout 
+# (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
+
+other_cols = show_columns_with_na(data_2013, 0)
+data_2013 = remove_columns(data_2013, other_cols)
 ```
 
 
-#charter_2013 = subset(data_2013, CHARTER %in% c('D','Y'), 
-#                select=c(VCST_E91, VCST_M91, VCHS_E91, VCHS_M91,  ST_RANK, FULL, EMER, TESTED, AVG_ED, #ACS_CORE,ACS_46))
-#public_2013 = subset(data_2013, !(CHARTER %in% c('D','Y')), 
-#                select=c(VCST_E91, VCST_M91, VCHS_E91, VCHS_M91,  ST_RANK, FULL, EMER, TESTED, AVG_ED, #ACS_CORE,ACS_46))
-#nrow(charter)
-#nrow(public)
-```
+Next step is to convert numeric columns back to NUM and factor columns to FACTOR
+
 
 Next, we perform variable selection on an additive model.
 
