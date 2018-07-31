@@ -139,6 +139,9 @@ hist(ED_ALL)
 PEN_ALL = school$PEN_2 + school$PEN_35 + school$PEN_6 + school$PEN_78 + school$PEN_91 
 hist(PEN_ALL)
 
+# enrolled and tested are highly correlated as well
+cor(school$ENROLL, school$TESTED)
+
 # split dataframe into training and test
 n = nrow(school)
 trn_idx = sample(nrow(school), n/2)
@@ -162,14 +165,16 @@ calc_loocv_rmse = function(model) {
 #GR_TARG causing problem when predicting
 # leaving out PCT_MR, PEN_91, and NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they add up to 100%
 schl_mod = lm(API10B ~ #.,
-                (STYPE + ST_RANK + SIM_RANK + CHARTER + #GR_TARG +
+                (STYPE + CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
                 PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + #PCT_MR +
                 MEALS + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI +
-                CBMOB + DMOB + PCT_RESP + 
+                CBMOB + #DMOB + 
+                PCT_RESP + 
                 AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
                 PEN_2 + PEN_35 + PEN_6 + PEN_78 + #PEN_91 +
                 ENROLL + #TESTED + 
-                  PARENT_OPT  + YR_RND + SCI) ,#^ 2,
+                  PARENT_OPT  + YR_RND #+ SCI
+                ) ,#^ 2,
               data = school_trn)
 
 # Check assumptions
@@ -204,10 +209,34 @@ qqline(resid(schl_aic))
 summary(schl_aic)
 #length(coef(schl_aic)) - 1
 vif(schl_aic)
+#(col = colnames(school[,which(vif(schl_aic) < 5)]))
 calc_loocv_rmse(schl_mod)
 plot(fitted(schl_aic) , resid(schl_aic))
 
 
+```
+
+```{r}
+sum(cooks.distance(schl_aic) > 4/nrow(school_trn))
+#sum(hatvalues())
+schl_novif = lm(API10B ~  PCT_AA +   PCT_AI  +  PCT_AS  +  PCT_FI  +   MEALS +   P_GATE  + P_MIGED   +   P_EL +
+                  P_DI   +  CBMOB + PCT_RESP  +  AVG_ED   +  PEN_2 +   PEN_35   +  PEN_6  +  PEN_78,
+                select = cooks.distance(schl_aic) <= 4/nrow(school_trn),
+                data = school_trn)
+#schl_aic = step(schl_mod, direction = "both", trace = FALSE, maxit = 50)
+
+# check assumptions
+bptest(schl_novif)
+shapiro.test(resid(schl_novif))
+qqnorm(resid(schl_novif))
+qqline(resid(schl_novif))
+
+# check how the model is fitting
+summary(schl_novif)
+#length(coef(schl_aic)) - 1
+vif(schl_novif)
+calc_loocv_rmse(schl_novif)
+plot(fitted(schl_novif) , resid(schl_novif))
 ```
 
 ### Methodology
