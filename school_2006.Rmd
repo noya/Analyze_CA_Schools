@@ -1,0 +1,149 @@
+---
+title: "Group Project, 2006"
+author: "Irina"
+date: "July 29, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, warning = FALSE, message = FALSE}
+library(foreign)
+library(foreign)
+library(lmtest)
+library(faraway)
+library(ggplot2)
+library(reshape2)
+```
+## Dataset Description
+
+The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+
+With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+
+## Background
+
+School performance as recorded by the CA Dept. of Education from 1999-2013 (https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp)
+
+## Interest
+
+Interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools.
+
+## Proof of Loading the Dataset into R
+```{r}
+base_data_2006 = read.dbf("api06bdb.dbf", as.is = TRUE)
+dim(base_data_2006)
+```
+Choosing predictors of interest:
+```{r}
+data_2006 = subset(base_data_2006, select = c("API06b","PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI","PCT_HI", "PCT_PI", "PCT_WH", "P_EL","MEALS", "FULL", "EMER", "AVG_ED", "P_GATE", "ACS_K3", "ACS_46","ACS_CORE", "P_RFEP", "P_DI", "CBMOB", "DMOB", "CHARTER"))
+
+#Renaming columns
+my_names = c("API","african_american", "american_ind", "asian", "filipino", "hispanic", "pacific_islander", "white", "eng_learners", "free_meals","teacher_full","teacher_emer", "parent_education", "gifted", "class_sizeK3", "class_size_46", "num_core_courses", "reclas_eng_learners", "disability", "school_mobility", "district_mobility","charter")
+names(data_2006) = my_names
+
+#Converting to numeric
+data_2006[,c(1:20)] <- sapply(data_2006[,c(1:20)], as.numeric)
+
+#Charter schools are coded as 'D' or 'Y' for different categories of charter and "NA" for non-charter school. I changed the default levels: I used 'Y' for both 'D' and 'Y' and 'N' for 'NA'.
+data_2006$charter = ifelse(is.na(data_2006$charter), "N", "Y")
+
+#Removing observations that don't have API score
+data_2006 = data_2006[!is.na(data_2006$API),]
+head(data_2006)
+
+
+```
+```{r fig.height=25, fig.width=10, warning = FALSE}
+par(mfrow = c(12, 2))
+no_charter = subset(data_2006, select = -c(charter))
+# plot( ( API^2.5 - 1 ) / 2.5 ~ ., data = no_charter, col = "darkgrey", pch = 19)
+plot( API ~ ., data = no_charter, col = "darkgrey", pch = 19)
+
+```
+
+```{r}
+boxplot(API ~ charter, data = data_2006)
+```
+Class size, american indian, filipino, pacific islander, disability do not seem to have a linear relationship with API. School mobility and district mobility are highly correlated, so we have to choose one.
+
+```{r}
+data_2006 = subset(data_2006, select = -c(american_ind, filipino, pacific_islander, disability, class_sizeK3, class_size_46, reclas_eng_learners, district_mobility))
+```
+
+Additional data clean-up:
+```{r}
+#Checking percentage of missing datat for each column
+sapply(data_2006, function(x) mean (is.na(x)))
+
+#Dealing with invalid data for parent education ("0" is most likely missing data)
+data_2006 = subset(data_2006, subset = parent_education != 0)
+
+#"Num of core courses" variable has a large percentage of NAs, so removing it.
+data_2006 = subset(data_2006, select = -c(num_core_courses))
+                   
+#Checking the result
+str(data_2006)
+head(data_2006)
+dim(data_2006)
+```
+
+Selecting the model:
+
+```{r}
+n = nrow(data_2006)
+
+mod_start = lm(API ~ ., data = data_2006)
+mod_back_bic = step(mod_start, k = log(n), trace = 0)
+summary(mod_back_bic)
+
+```
+Checking assumptions:
+```{r}
+par(mfrow = c(2,2))
+plot(mod_back_bic, col = "dodgerblue")
+bptest(mod_back_bic)
+#This is to perform Shapiro test that takes sample size 5000 max
+sample_idx = sample(nrow(data_2006), 5000)
+my_sample = resid(mod_back_bic)[sample_idx]
+shapiro.test(my_sample)
+```
+
+Box-Cox transform:
+```{r}
+library( MASS )
+boxcox(mod_back_bic, plotit = TRUE, lambda = seq(0, 5, by = 0.1))
+```
+```{r}
+model_cox = lm((API ^ 2.4 - 1)/2.4 ~ asian + hispanic + white + free_meals + teacher_full + 
+    teacher_emer + parent_education + gifted + school_mobility + 
+    charter, data = data_2006)
+
+#Box-Cox does not seem to help:
+par(mfrow = c(2,2))
+plot(model_cox, col = "dodgerblue")
+bptest(model_cox)
+#This is to perform Shapiro test that takes sample size 5000 max
+sample_idx = sample(nrow(data_2006), 5000)
+my_sample = resid(model_cox)[sample_idx]
+shapiro.test(my_sample)
+```
+Constant variance and normaility assumptions are violated.
+
+Removing influential observations does not seem to help:
+```{r}
+cd = cooks.distance(model_cox)
+mod_new = lm((API ^ 2.4 - 1)/2.4 ~ asian + hispanic + white + free_meals + teacher_full + 
+    teacher_emer + parent_education + gifted + school_mobility + 
+    charter, data = data_2006, subset = cd < 4 / length(cd))
+summary(mod_new)
+bptest(mod_new)
+```
+
+Checking correlations:
+```{r}
+
+vif(model_cox)
+```
+

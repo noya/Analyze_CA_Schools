@@ -1,0 +1,123 @@
+---
+title: "Charter 2013"
+author: "rjs8"
+date: '07/30/2018'
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(foreign)
+```
+
+```{r eval=FALSE,include=FALSE}
+install.packages("foreign")
+```
+
+```{r}
+data_2013 = read.dbf("data/api13gdb.dbf")
+```
+
+```{r eval=FALSE,include=FALSE}
+View(data_2013)
+```
+
+# Analysis of Education Data for 2013
+
+The education data tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials. We want to see which factors contributed most to performance for 2013.
+
+## Methodology
+
+* Split data into charter and non-charter.
+* Fit models with performance as a response for both.
+* Check normality assumptions.
+* Responses: english score, math score, science score, exit exam score, state rank
+* Factors: parental education, class size, teacher with full credentials, teacher with emergency credentials, student race, district, county
+* Study should answer which factors are most relevant to performance, and the differences in those factors between charter schools and public schools
+
+## The Data Source
+
+The file used for this analysis is at https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp, specifically, the "2013 Growth API".
+
+## Response
+
+The response variable for this analysis is going to be `cicp`, which measures
+
+## Predictors
+
+We start out by looking at the data and removing any rows that have missing data since we would be unable to provide estimates for their values.
+```{r}
+# Clean up rows with NAs
+#data_2013=na.omit(data_2013) # apparently there are NAs in every row; this gave me an empty dataframe
+
+# First get the subset that the documentation says has valid statistical data,
+# then remove the FLAG column because we don't need it anymore.
+# Also remove the other alternative responses related to growth and APIs.
+data_2013 = subset(data_2013, subset = is.na(data_2013$FLAG), select = colnames(data_2013)[!(colnames(data_2013) %in% c('FLAG','API12','TARGET','GROWTH','SCH_WIDE','COMP_IMP','BOTH'))])
+nrow(data_2013)
+```
+```{r}
+# Remove all _TARG, _MET, _SIG, _API12, _API13 columns which are just metadata about whether targets were met
+# or whether columns were significant.
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_TARG", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_MET", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_SIG", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_API12", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_API13", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_NUM", colnames(data_2013), perl=TRUE, value=FALSE)])
+data_2013 = subset(data_2013, select = colnames(data_2013)[-grep("_GROW", colnames(data_2013), perl=TRUE, value=FALSE)])
+
+# Transform CHARTER column to indicate Y or N because it uses NA to indicate a non-charter school
+data_2013$CHARTER = as.factor(ifelse(is.na(data_2013$CHARTER), "Y", "N"))
+
+# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+data_2013 = subset(data_2013, subset = is.na(data_2013$SM12) & is.na(data_2013$SM13), select = colnames(data_2013)[!(colnames(data_2013) %in% c('SM12','SM13'))])
+
+# Remove schools with SIZE = S or T which indicate non-valid API scores
+data_2013 = subset(data_2013, subset = !is.na(data_2013$SIZE), select = colnames(data_2013)[!(colnames(data_2013) %in% c('SIZE'))])
+
+# Transform SPED column by setting NA to 'R' for regular b/c it uses NA to indicate regular schools
+data_2013$SPED = as.factor(ifelse(is.na(data_2013$SPED), "R", data_2013$SPED))
+
+# Remove columns that have > 80% NA values
+col_na_ratios = rep(0, length(colnames(data_2013)))
+for(c in 1:length(colnames(data_2013))) {
+  col_na_ratios[c] = mean(is.na(data_2013[,colnames(data_2013)[c]]))
+}
+colnames(data_2013)[col_na_ratios > 0.8]
+```
+
+
+#charter_2013 = subset(data_2013, CHARTER %in% c('D','Y'), 
+#                select=c(VCST_E91, VCST_M91, VCHS_E91, VCHS_M91,  ST_RANK, FULL, EMER, TESTED, AVG_ED, #ACS_CORE,ACS_46))
+#public_2013 = subset(data_2013, !(CHARTER %in% c('D','Y')), 
+#                select=c(VCST_E91, VCST_M91, VCHS_E91, VCHS_M91,  ST_RANK, FULL, EMER, TESTED, AVG_ED, #ACS_CORE,ACS_46))
+#nrow(charter)
+#nrow(public)
+```
+
+Next, we perform variable selection on an additive model.
+
+### Tests for Normality
+
+We test the model for normality to make sure our model is valid.
+
+QQPlots
+
+BPTest and Shapiro Test
+
+Adjust data and model until normality tests pass.
+
+Remove outliers by using cooks distance.
+
+### Report on Model
+
+Finally, we report on the predictors that were relevant for 2013 in influencing performance. This is correlation and not causation. 
+
+We explore how performance could be improved in the future by tweaking the predictor variables.
+
+
