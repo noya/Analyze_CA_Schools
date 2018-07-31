@@ -34,190 +34,132 @@ str(school)
 ```
 
 ```{r}
-#################################
-# Students' Performance compared with Students' backgrounds
-#################################
-# we will only look at data at least with API scores
-school = school[!is.na(school$API10B), ]
-school$API10B = as.numeric(school$API10B)
+# we only want to look at schools with API and Charter data filled
+nrow((school)) 
+school = school[which(!is.na(school$CHARTER)),]
+nrow(school)
+levels(school$CHARTER)
 
-# API vs Percent of english learner
-anyNA (school$P_EL)
-school$P_EL = as.numeric(school$P_EL)
-plot( API10B ~ P_EL, data = school)
+school = school[which(!is.na(school$API10B)),]
+nrow(school)  #769
 
-# API vs Percent of gifted student
-#anyNA(school$P_DI)
-#school$P_DI = as.numeric(school$P_DI)
-anyNA(school$P_GATE)
-school$P_GATE = as.numeric(school$P_GATE)
-plot( API10B ~ P_GATE, data = school)
-
-# API vs meals
-anyNA(school$MEALS)
-school$MEALS = as.numeric(school$MEALS)
-plot( API10B ~ MEALS, data = school)
-
-# API vs Average parent education
-school$AVG_ED = as.numeric(school$AVG_ED)
-plot( API10B ~ AVG_ED, data = school)
+# we want to examine which columns is filled with NA data
+# we only want to look at data that is at least half filled
+sumval = rep(0, ncol(school))
+valcold = rep(FALSE, ncol(school))
 
 
+for (col in 1:ncol(school)) {
+  sumval[col] = sum(!is.na(school[, col]) )
+  valcold[col] = as.logical(sumval[col] > nrow(school)/2)
+}
 
-```
-```{r}
-#################################
-# Students' Performance compared with School's Statistics
-#################################
+valcoln = colnames(school[0,])[valcold]
+valcoln
 
-# TODO: need to figure out what do the different CW_* mean -> Done
-# TODO: Need to know how did the school rank and school charac are caclulated, are they based on API => API is a dependent variable
-# TODO: ST_RANK, what is B = district or ASAM, C = special education school?
-
-# select our main predictor, charter school type
-# head(school$CHARTER)
-school$CHARTER = ifelse(is.na(school$CHARTER), "NY", school$CHARTER)
-school$CHARTER = as.factor(school$CHARTER)
-
-# do a quick check on API score with charter school type
-boxplot(API10B ~ CHARTER, data = school)
-
-
-# API vs school rank, does it depend on API?
-#school$ST_RANK = as.numeric(school$ST_RANK)
-school_norank = school[!is.na(school$ST_RANK),]
-school_norank$ST_RANK = as.factor(school_norank$ST_RANK)
-str(school_norank$ST_RANK)
-levels(school_norank$ST_RANK)
-plot( API10B ~ ST_RANK, data = school_norank )
-
-###########
-# No info 
-########
-# API vs teacher w/ full credentials
-# Skip due to no schools has the data
-sum(!is.na(school$FULL))
-sum(is.na(school$FULL))
-
-# API vs teacher emergency credentials
-sum(!is.na(school$EMER))
-sum(is.na(school$EMER))
-
-# API vs Average Class Size (Grade K3)
-sum(!is.na(school$ACS_K3))
-sum(is.na(school$ACS_K3))
-#school$ACS_K3 = as.numeric(school$ACS_K3)
-#plot(API10B ~ ACS_K3, data = school)
-
-# API vs Average Class Size (Grade K3)
-sum(!is.na(school$ACS_46))
-sum(is.na(school$ACS_46))
-#school$ACS_46 = as.numeric(school$ACS_46)
-#plot(API10B ~ ACS_46, data = school)
-
-# API vs Average Class Size (Grade K3)
-sum(!is.na(school$ACS_CORE))
-sum(is.na(school$ACS_CORE))
-#school$ACS_CORE = as.numeric(school$ACS_CORE)
-#plot(API10B ~ ACS_CORE, data = school)
-
-###########
-# End of No info 
-########
-
-# API vs school characteristic index 
-# https://www.cde.ca.gov/ta/ac/ap/documents/tdgreport0400.pdf  
-# This index largely reflect varaiblaes outside of the control of the school
-
-sum(!is.na(school$SCI))
-sum(is.na(school$SCI))
-school$SCI = as.numeric(school$SCI)
-plot( API10B ~ SCI, data = school )
-
-# API vs similar rank
-school$SIM_RANK = as.factor(school$SIM_RANK)
-plot(API10B ~ SIM_RANK, data = school)
-
-# API vs Type: 1=Unified, 2=Elementary District, 3=9-12 High District, 4=7-12 High District, E=Elementary School, M=Middle School, H=High School 
-school$STYPE = as.factor(school$STYPE)
-plot(API10B ~ STYPE, data = school)
-
-# API vs A=Alternative Schools Accountability Model (ASAM), E=Special Education, and C=Combination ASAM and Special Education, S=State Special Schools
-school$SPED = ifelse(is.na(school$SPED), 'NA', school$SPED)
-school$SPED = as.factor(school$SPED)
-plot(API10B ~ SPED, data = school)
-# https://www.cde.ca.gov/ta/ac/ap/glossary12d.asp
-# cstseng: Seems like it's only related to how much percentage the school weighs the tests
-
-###########
-# Possibly not include as predictors?
-########
-
-# API vs School content area weights percentage in CST english language arts
-school$CW_CSTE = as.numeric(school$CW_CSTE)
-plot(API10B ~ CW_CSTE, data = school)
-
-# API vs School content area weights percentage in CST math
-school$CW_CSTM = as.numeric(school$CW_CSTM)
-plot(API10B ~ CW_CSTM, data = school)
-
-# API vs School content area weights percentage in CST History Social Science
-school$CW_CSTH = as.numeric(school$CW_CSTH)
-plot(API10B ~ CW_CSTH, data = school) # inverse relationship?? :(
-
-# API vs School content area weights CW_CHSE in High school exit exam (CAHSEE) in english language arts
-school$CW_CHSE = as.numeric(school$CW_CHSE)
-plot(API10B ~ CW_CHSE, data = school)
-
-# API vs School content area weights CW_CHSE in High school exit exam (CAHSEE) in math
-school$CW_CHSM = as.numeric(school$CW_CHSM)
-plot(API10B ~ CW_CHSM, data = school)
-
-# How is CW_CSTM diffierent than CWM2_28, is it combined?
+# we only select columns with data filled
+school = school[,valcold]
 
 ```
 
-
 ```{r}
-
-# We will select predictors we are interested in
-        # Engliash   Math         Science     History Social Science        
-sub_resp = c("VCST_E28", "VCST_M28", "VCST_S28", "VCST_H28",  # grade 2 ~ 8
-         "VCST_E91", "VCST_M91", "VCST_S91",  "VCST_H91", # grade 9 ~ 11
-         "VCHS_E91", "VCHS_M91")                          # high school exit exam 9 ~ 11
-
-api_resp = c("API10B", "AA_API", "AI_API", "AS_API", "FI_API", "HI_API", "PI_API", "WH_API")    
-
-# SIM_RANK
-# Need to compare AA_NUM with VALID
-st_pred = c(#"AA_SIG", "AI_SIG", "AS_SIG", "FI_SIG", "HI_SIG", "WHI_SIG", "MR_SIG",
-                  "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI", "PCT_WH", "PCT_MR",
-                  "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", 
-                  "MEALS", "AVG_ED")
-                 # "SD_SIG", "EL_SIG", "DL_SIG", , "MEALS")
-
-schl_pred = c("CHARTER", "ST_RANK", "ACS_K3", "ACS_46", "ACS_CORE", 
-              "FULL", "EMER",   # teacher's credential
-              "CW_CSTE", "CW_CSTM", "CWS_91", "CW_CSTH", "CW_CHSE", "CW_CHSM", "CW_SCI",
-              "CWM2_91", "CWS2_91", "CWM2_28", "CWM2_91", "CWS2_91") # content area weights
+# Now we eliminate any observations that doesn't have all data filled
+# SPED, CHARTER was eliminated
+# RTYPE only has 1 level
+nrow(school) # 769
+ncol(school) # 117
+colnames(school[0,])
+school = na.omit(school)
+(n = nrow(school))  # 144
+ncol(school)
+colnames(school[0,])
 
 
 ```
 
 ```{r}
-school_gwr = read.dbf("data/api10gdb.dbf", as.is = TRUE)
-sum(!is.na(school_gwr$FULL))
-sum(is.na(school_gwr$FULL))
 
-sum(!is.na(school_gwr$EMER))
-sum(is.na(school_gwr$EMER))
+# convert predictors to factors
+# not including API_TARG
+fac_pred = c('RTYPE', 'STYPE', 'SPED', 'SIZE', 'CHARTER', "ST_RANK", "SIM_RANK",
+             "GR_TARG", "AS_GT", "YR_RND")
 
-school_gwr13 = read.dbf("data/api13gdb.dbf", as.is = TRUE)
-sum(!is.na(school_gwr13$FULL))
-sum(is.na(school_gwr13$FULL))
+# conver predictors to numerics
+# could consider adding AA_API etc
+num_pred = c("API10B", 
+             "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI", "PCT_WH", "PCT_MR",
+             "MEALS", "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", "CBMOB", "DMOB", 
+             "PCT_RESP", "NOT_HSG", "HSG", "SOME_COL", "COL_GRAD", "GRAD_SCH", "AVG_ED",
+             "PEN_2", "PEN_35", "PEN_6", "PEN_78", "PEN_91",
+             "ENROLL", "PARENT_OPT", "TESTED", "SCI"
+             )
+# Only select columns we are interested in
+school = subset(school, select = colnames(school[0, ]) %in% c(fac_pred, num_pred))
 
-sum(!is.na(school_gwr13$EMER))
-sum(is.na(school_gwr13$EMER))
+# convert all columns listed in fac_pred to factors
+for(col in fac_pred) {
+  if(col %in% colnames(school[0,])) {
+    school[, col] = as.factor(school[, col])
+  }
+}
+
+# convert all columns listed in num_pred to numerics
+for(col in num_pred) {
+  if(col %in% colnames(school[0,])) {
+    school[, col] = as.numeric(school[, col])
+  }
+}
+
+# split dataframe into training and test
+n = nrow(school)
+trn_idx = sample(nrow(school), n/2)
+school_trn = school[trn_idx, ]
+school_tst = school[-trn_idx, ]
+
+```
+
+```{r}
+
+#GR_TARG causing problem when predicting
+schl_mod = lm(API10B ~  
+                (STYPE + ST_RANK + SIM_RANK + #GR_TARG +
+                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + PCT_MR +
+                MEALS + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI +
+                CBMOB + DMOB + PCT_RESP + NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
+                AVG_ED + PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_91 +
+                ENROLL + PARENT_OPT + TESTED + YR_RND + SCI) ,#^ 2,
+              data = school_trn)
+
+pred_api = predict(schl_mod, newdata = school_tst)
+plot(pred_api ~ school_tst$API10B)
+
+# test assumptions
+library(lmtest)
+library(faraway)
+vif(schl_mod)
+
+summary(schl_mod)
+bptest(schl_mod)
+nrow(school_trn)
+shapiro.test(resid(schl_mod))
+plot(fitted(schl_mod) ~ resid(schl_mod), data = school_tst)
+qqnorm(resid(schl_mod))
+qqline(resid(schl_mod))
+```
+
+```{r}
+schl_aic = step(schl_mod, direction = "backward", trace = FALSE)
+summary(schl_aic)
+library(faraway)
+vif(schl_aic)
+bptest(schl_aic)
+nrow(schl_aic)
+shapiro.test(resid(schl_aic))
+plot(fitted(schl_aic) ~ resid(schl_aic), data = school_tst)
+qqnorm(resid(schl_aic))
+qqline(resid(schl_aic))
+
+
 ```
 
 ### Methodology
