@@ -121,8 +121,8 @@ school_tst = school[-trn_idx, ]
 ```{r}
 
 #GR_TARG causing problem when predicting
-schl_mod = lm(API10B ~  
-                (STYPE + ST_RANK + SIM_RANK + #GR_TARG +
+schl_mod = lm(API10B ~ 
+                (STYPE + ST_RANK + SIM_RANK + CHARTER + #GR_TARG +
                 PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + PCT_MR +
                 MEALS + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI +
                 CBMOB + DMOB + PCT_RESP + NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
