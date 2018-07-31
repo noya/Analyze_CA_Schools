@@ -92,7 +92,7 @@ data_2013 = subset(data_2013, subset = is.na(data_2013$SM12) & is.na(data_2013$S
 data_2013 = subset(data_2013, subset = !(data_2013$SIZE %in% c("S","T")), select =!(colnames(data_2013) %in% c('SIZE')))
 
 # Transform CHARTER column to indicate Y or N because it uses NA to indicate a non-charter school
-data_2013$CHARTER = as.factor(ifelse(is.na(data_2013$CHARTER), "Y", "N"))
+data_2013$CHARTER = as.factor(ifelse(is.na(data_2013$CHARTER), "N", "Y"))
 
 
 # Transform SPED column by setting NA to 'R' for regular b/c it uses NA to indicate regular schools
