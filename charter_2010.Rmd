@@ -35,16 +35,29 @@ str(school)
 
 ```{r}
 # we only want to look at schools with API and Charter data filled
-nrow((school)) 
-school = school[which(!is.na(school$CHARTER)),]
-nrow(school)
-levels(school$CHARTER)
-
+nrow((school))  #10885
 school = school[which(!is.na(school$API10B)),]
-nrow(school)  #769
+nrow(school)  #10153
+
+# Remove school rank that are I = Invalid, B = District, or C = Special Education School
+#!(school$ST_RANK %in% c("I", "B", "C"))
+school = school[!(school$ST_RANK %in% c("I", "B", "C")), ]
+levels(as.factor(school$ST_RANK))
+
+# Remove school similar rank that are I = Invalid, B = District, or C = Special Education School
+#!(school$ST_RANK %in% c("I", "B", "C"))
+school = school[!(school$SIM_RANK %in% c("I", "B", "C", "O", "S")), ]
+levels(as.factor(school$SIM_RANK))
+
+# Assign CHARTER == na to NC (none charter)
+school$CHARTER = ifelse(is.na(school$CHARTER), "NC", school$CHARTER)
+
+# Need to investigate GR_TARG
+#levels(as.factor(school$GR_TARG))
 
 # we want to examine which columns is filled with NA data
 # we only want to look at data that is at least half filled
+ncol(school)
 sumval = rep(0, ncol(school))
 valcold = rep(FALSE, ncol(school))
 
@@ -59,42 +72,44 @@ valcoln
 
 # we only select columns with data filled
 school = school[,valcold]
-
-```
-
-```{r}
-# Now we eliminate any observations that doesn't have all data filled
-# SPED, CHARTER was eliminated
-# RTYPE only has 1 level
-nrow(school) # 769
-ncol(school) # 117
-colnames(school[0,])
-school = na.omit(school)
-(n = nrow(school))  # 144
 ncol(school)
-colnames(school[0,])
-
-
 ```
+
 
 ```{r}
 
 # convert predictors to factors
 # not including API_TARG
-fac_pred = c('RTYPE', 'STYPE', 'SPED', 'SIZE', 'CHARTER', "ST_RANK", "SIM_RANK",
+fac_pred = c('RTYPE', 'STYPE', 'SPED', 'SIZE', 'CHARTER', 
              "GR_TARG", "AS_GT", "YR_RND")
 
+levels(as.factor(school$ST_RANK))
+
 # conver predictors to numerics
+# Note we purposely leave out AA_NUM, AA_SIG because they are related to PCT_AA
 # could consider adding AA_API etc
-num_pred = c("API10B", 
-             "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI", "PCT_WH", "PCT_MR",
+num_pred = c("ST_RANK", "SIM_RANK",
+             "API10B", 
+             "AA_API", "AI_API", "AS_API", "FI_API", "HI_API", "PI_API", "WH_API", "MR_API",
+             "SD_API", "EL_API", "DI_API",
+             "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI","PCT_PI", "PCT_WH", "PCT_MR",
              "MEALS", "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", "CBMOB", "DMOB", 
+             "ACS_K3", "ACS_46", "ACS_CORE", 
              "PCT_RESP", "NOT_HSG", "HSG", "SOME_COL", "COL_GRAD", "GRAD_SCH", "AVG_ED",
              "PEN_2", "PEN_35", "PEN_6", "PEN_78", "PEN_91",
              "ENROLL", "PARENT_OPT", "TESTED", "SCI"
              )
 # Only select columns we are interested in
 school = subset(school, select = colnames(school[0, ]) %in% c(fac_pred, num_pred))
+
+# Now we eliminate any observations that doesn't have all data filled
+nrow(school)
+ncol(school)
+colnames(school[0,])
+school = na.omit(school)
+(n = nrow(school))  
+ncol(school)
+
 
 # convert all columns listed in fac_pred to factors
 for(col in fac_pred) {
@@ -110,54 +125,87 @@ for(col in num_pred) {
   }
 }
 
+# the rest of PCT_* add up to 100%
+PCT_ALL = school$PCT_AA + school$PCT_AI + school$PCT_AS + school$PCT_FI + school$PCT_HI + school$PCT_PI + school$PCT_WH + school$PCT_MR
+hist(PCT_ALL)
+#pct_mr_idx = which(colnames(school[0,]) == "PCT_MR")
+#school = school[0, -pct_mr_idx]
+
+# parents' education info adds up to 100%
+ED_ALL = school$NOT_HSG + school$HSG + school$SOME_COL + school$COL_GRAD + school$GRAD_SCH 
+hist(ED_ALL)
+
+# percentage of school enrollment adds up to PEN_ENROLL
+PEN_ALL = school$PEN_2 + school$PEN_35 + school$PEN_6 + school$PEN_78 + school$PEN_91 
+hist(PEN_ALL)
+
 # split dataframe into training and test
 n = nrow(school)
 trn_idx = sample(nrow(school), n/2)
 school_trn = school[trn_idx, ]
 school_tst = school[-trn_idx, ]
-
 ```
 
 ```{r}
+# include necessary library
+library(lmtest)
+library(faraway)
 
+# define helper function
+calc_loocv_rmse = function(model) {
+  sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
+}
+
+#pairs(school_trn)
+#str(school_trn)
+#(unique(as.numeric(cor(school_trn[,num_pred]))))
 #GR_TARG causing problem when predicting
-schl_mod = lm(API10B ~ 
+# leaving out PCT_MR, PEN_91, and NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they add up to 100%
+schl_mod = lm(API10B ~ #.,
                 (STYPE + ST_RANK + SIM_RANK + CHARTER + #GR_TARG +
-                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + PCT_MR +
+                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + #PCT_MR +
                 MEALS + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI +
-                CBMOB + DMOB + PCT_RESP + NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
-                AVG_ED + PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_91 +
-                ENROLL + PARENT_OPT + TESTED + YR_RND + SCI) ,#^ 2,
+                CBMOB + DMOB + PCT_RESP + 
+                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
+                PEN_2 + PEN_35 + PEN_6 + PEN_78 + #PEN_91 +
+                ENROLL + #TESTED + 
+                  PARENT_OPT  + YR_RND + SCI) ,#^ 2,
               data = school_trn)
+
+# Check assumptions
+bptest(schl_mod)
+shapiro.test(resid(schl_mod))
+qqnorm(resid(schl_mod))
+qqline(resid(schl_mod))
+
+# Check how well the model is fitting
+summary(schl_mod)
+#length(coef(schl_mod)) - 1
+vif(schl_mod)
 
 pred_api = predict(schl_mod, newdata = school_tst)
 plot(pred_api ~ school_tst$API10B)
 
-# test assumptions
-library(lmtest)
-library(faraway)
-vif(schl_mod)
+calc_loocv_rmse(schl_mod)
+plot(fitted(schl_mod) , resid(schl_mod))
 
-summary(schl_mod)
-bptest(schl_mod)
-nrow(school_trn)
-shapiro.test(resid(schl_mod))
-plot(fitted(schl_mod) ~ resid(schl_mod), data = school_tst)
-qqnorm(resid(schl_mod))
-qqline(resid(schl_mod))
 ```
 
 ```{r}
-schl_aic = step(schl_mod, direction = "backward", trace = FALSE)
-summary(schl_aic)
-library(faraway)
-vif(schl_aic)
+schl_aic = step(schl_mod, direction = "backward", trace = FALSE, maxit = 50)
+
+# check assumptions
 bptest(schl_aic)
-nrow(schl_aic)
 shapiro.test(resid(schl_aic))
-plot(fitted(schl_aic) ~ resid(schl_aic), data = school_tst)
 qqnorm(resid(schl_aic))
 qqline(resid(schl_aic))
+
+# check how the model is fitting
+summary(schl_aic)
+#length(coef(schl_aic)) - 1
+vif(schl_aic)
+calc_loocv_rmse(schl_mod)
+plot(fitted(schl_aic) , resid(schl_aic))
 
 
 ```
