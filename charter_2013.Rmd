@@ -208,9 +208,11 @@ BPTest and Shapiro Test
 ```{r}
 bptest(model_sel)
 bptest(log_model_sel)
+
+shapiro.test(resid(model_sel)[1:3000])
 ```
 
-It passes the Breusch-Pagan test with a p-value << 0.05.
+It passes the Breusch-Pagan test with a p-value << 0.05. It also passed the Shapiro test with a significant p-value.
 
 
 ### Report on Model
