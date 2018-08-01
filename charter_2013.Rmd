@@ -187,27 +187,11 @@ qqline(resid(model_sel))
 plot(resid(model_sel), fitted(model_sel))
 ```
 
-The data seems to be clustered. Do a response log transform.
-```{r}
-log_model_sel = lm(formula = log(API13) ~ STYPE + CHARTER + VALID + PCT_AA + PCT_AI + 
-    PCT_AS + PCT_FI + PCT_HI + PCT_PI + PCT_WH + PCT_MR + MEALS + 
-    P_MIGED + P_DI + CBMOB + DMOB + ACS_K3 + ACS_46 + ACS_CORE + 
-    NOT_HSG + HSG + SOME_COL + GRAD_SCH + AVG_ED + FULL + EMER + 
-    PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 + ENROLL + PAR_OPT + 
-    CW_CSTE + CWS_91 + CW_CSTH + CW_CHSM + CW_SCI + CWM2_28 + 
-    CWM2_91 + CWS2_91, data = data_2013)
-
-qqnorm(resid(log_model_sel))
-qqline(resid(log_model_sel))
-plot(resid(log_model_sel), fitted(log_model_sel))
-
-```
 
 
 BPTest and Shapiro Test
 ```{r}
 bptest(model_sel)
-bptest(log_model_sel)
 
 shapiro.test(resid(model_sel)[1:3000])
 ```
