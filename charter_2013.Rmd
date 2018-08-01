@@ -12,6 +12,14 @@ urlcolor: cyan
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(foreign)
+library(ggplot2)
+library(latex2exp)
+library(lmtest)    # provides bptest()
+library(knitr)     # provides kable()
+library(readr)
+library(gridExtra)
+library(car)       # provides car
+library(caret)
 ```
 
 ```{r eval=FALSE,include=FALSE}
@@ -128,24 +136,87 @@ nrow(data_2013)
 ```
 
 
-Next step is to convert numeric columns back to NUM and factor columns to FACTOR
+Next step is to convert numeric columns back to NUM and factor columns to FACTOR.
+```{r}
+num_columns = c('CDS','VALID','API13','PCT_AA','PCT_AI','PCT_AS','PCT_FI','PCT_HI','PCT_PI','PCT_WH',
+'PCT_MR','MEALS','P_GATE','P_MIGED','P_EL','P_RFEP','P_DI','CBMOB','DMOB','ACS_K3',
+'ACS_46','ACS_CORE','PCT_RESP','NOT_HSG','HSG','SOME_COL','COL_GRAD','GRAD_SCH','AVG_ED','FULL',
+'EMER','PEN_2','PEN_35','PEN_6','PEN_78','PEN_911','ENROLL','PAR_OPT','TESTED','MEDIAN13',
+'MEDIAN12','VCST_E28','PCST_E28','VCST_E91','PCST_E91','CW_CSTE','VCST_M28','PCST_M28','VCST_M91','PCST_M91',
+'CW_CSTM','VCST_S28','PCST_S28','VCST_S91','PCST_S91','CWS_91','VCST_H28','PCST_H28','VCST_H91','PCST_H91',
+'CW_CSTH','VCHS_E','PCHS_E','CW_CHSE','VCHS_M','PCHS_M','CW_CHSM','TOT_28','TOT_91','CW_SCI',
+'VCST_LS10','PCST_LS10','CWM2_28','VCSTM2_28','PCSTM2_28','CWM2_91','VCSTM2_91','PCSTM2_91','CWS2_91','VCSTS2_91',
+'PCSTS2_91','sim_rank','st_rank')
+for(c in 1:length(num_columns)) {
+  data_2013[,num_columns[c]] = as.numeric(data_2013[,num_columns[c]])
+}
+```
 
 
 Next, we perform variable selection on an additive model.
+```{r}
+# remove school identifier
+data_2013 = remove_columns(data_2013, c("CDS"))
+
+unique(data_2013$RTYPE) # yields only one factor in dataset, so remove the column
+data_2013 = remove_columns(data_2013, c("RTYPE"))
+
+# Remove all fields with component test scores because this is what we're trying to find relationships for.
+data_2013 = remove_columns(data_2013, c('TESTED','MED13','MED12','VCST_E28','PCST_E28','VCST_E91','PCST_E91','VCST_M28','PCST_M28','VCST_M91',
+'PCST_M91','VCST_S28','PCST_S28','VCST_S91','PCST_S91','VCST_H28','PCST_H28','VCST_H91','PCST_H91','VCHS_E',
+'PCHS_E','VCHS_M','PCHS_M','TOT_28','TOT_91','MEDIAN13','MEDIAN12','chg_data','VCST_LS10','PCST_LS10',
+'VCSTM2_28','PCSTM2_28','173VCSTM2_91','174PCSTM2_91','VCSTS2_91','PCSTS2_91','IRG5','sim_rank','st_rank'))
+data_2013 = remove_columns(data_2013, c("VCSTM2_91","PCSTM2_91"))
+```
+
+```{r}
+model_initial = lm(API13 ~ ., data=data_2013)
+model_sel = step(model_initial, trace = 0)
+summary(model_sel)
+```
+
 
 ### Tests for Normality
 
 We test the model for normality to make sure our model is valid.
 
 QQPlots
+```{r}
+qqnorm(resid(model_sel))
+qqline(resid(model_sel))
+plot(resid(model_sel), fitted(model_sel))
+```
+
+The data seems to be clustered. Do a response log transform.
+```{r}
+log_model_sel = lm(formula = log(API13) ~ STYPE + CHARTER + VALID + PCT_AA + PCT_AI + 
+    PCT_AS + PCT_FI + PCT_HI + PCT_PI + PCT_WH + PCT_MR + MEALS + 
+    P_MIGED + P_DI + CBMOB + DMOB + ACS_K3 + ACS_46 + ACS_CORE + 
+    NOT_HSG + HSG + SOME_COL + GRAD_SCH + AVG_ED + FULL + EMER + 
+    PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 + ENROLL + PAR_OPT + 
+    CW_CSTE + CWS_91 + CW_CSTH + CW_CHSM + CW_SCI + CWM2_28 + 
+    CWM2_91 + CWS2_91, data = data_2013)
+
+qqnorm(resid(log_model_sel))
+qqline(resid(log_model_sel))
+plot(resid(log_model_sel), fitted(log_model_sel))
+
+```
+
 
 BPTest and Shapiro Test
+```{r}
+bptest(model_sel)
+bptest(log_model_sel)
+```
 
-Adjust data and model until normality tests pass.
+It passes the Breusch-Pagan test with a p-value << 0.05.
 
-Remove outliers by using cooks distance.
 
 ### Report on Model
+```{r}
+summary(model_sel)
+```
 
 Finally, we report on the predictors that were relevant for 2013 in influencing performance. This is correlation and not causation. 
 
