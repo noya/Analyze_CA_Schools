@@ -278,9 +278,12 @@ schl2013_tst = schl2013[-trn_idx, ]
 #################
 # 2010
 #################
-schl2010_fit = lm(API10  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 2) ,
-               data = schl2010_trn)
+# schl2010_fit = lm(API10  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
+#                data = schl2010_trn)
 
+schl2010_fit = lm(API10  ~  PEN_2  +  PEN_35   +  PEN_6   + PEN_78  +  PCT_AA  +  P_RFEP  +    P_DI   +   P_EL    + CBMOB + AVG_ED +  ENROLL, data = schl2010_trn)
+  
+  
 # check assumptions
 diagnostics(schl2010_fit)
 
@@ -295,8 +298,9 @@ plot(pred ~ schl2010_tst$API10, col = "dodgerblue")
 #################
 # 2013
 #################
-schl2013_fit = lm(API13  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + MEALS ,
-               data = schl2013_trn)
+# schl2013_fit = lm(API13  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + MEALS ,
+#                data = schl2013_trn)
+schl2013_fit = lm(API13  ~  PEN_2  +  PEN_35   +  PEN_6   + PEN_78  +  PCT_AA  +  P_RFEP  +    P_DI   +   P_EL    + CBMOB + AVG_ED +  ENROLL, data = schl2013_trn)
 
 # check assumptions
 diagnostics(schl2013_fit)
