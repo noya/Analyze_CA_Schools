@@ -401,10 +401,13 @@ coef(final2)
 ```
 
 
-In the end:
+In the end, the largest influencers of performance are:
 
-* positive influence on the overall performance for 2013 seems to be whether the student doesn't skip school day for more than 30 consecutive days from when the school starts, the parent's education level, and the class size
-* negative influencers include whether the school is a charter school or not, and the presence of some disadvantaged minority and ethnic groups
+* CBMOB - whether the student doesn't skip school day for more than 30 consecutive days from when the school starts
+* AVG_ED - the parent's education level
+* ACS_CORE - the class size
+* CHARTER - whether the school is a charter school or not
+* PCT_AA and PCT_PI - the presence of some disadvantaged minority and ethnic groups
 
 It's important to note that these influencers illustrate correlation and not causation.
 
