@@ -29,216 +29,330 @@ Interest in this dataset is driven by the current administration's Education Sec
 ## Proof of Loading the Dataset into R
 ```{r}
 library(foreign)
-school = read.dbf("data/api10bdb.dbf", as.is = TRUE)
-str(school)
+library(lmtest)
+library(faraway)
+schl2010 = read.dbf("data/api10gdb.dbf", as.is = TRUE)
+schl2013 = read.dbf("data/api13gdb.dbf", as.is = TRUE)
+#str(schl2010)
 ```
-
 ```{r}
-# we only want to look at schools with API and Charter data filled
-nrow((school))  #10885
-school = school[which(!is.na(school$API10B)),]
-nrow(school)  #10153
+###################
+# Common Columns
+###################
 
-# Remove school rank that are I = Invalid, B = District, or C = Special Education School
-#!(school$ST_RANK %in% c("I", "B", "C"))
-school = school[!(school$ST_RANK %in% c("I", "B", "C")), ]
-levels(as.factor(school$ST_RANK))
-
-# Remove school similar rank that are I = Invalid, B = District, or C = Special Education School
-#!(school$ST_RANK %in% c("I", "B", "C"))
-school = school[!(school$SIM_RANK %in% c("I", "B", "C", "O", "S")), ]
-levels(as.factor(school$SIM_RANK))
-
-# Assign CHARTER == na to NC (none charter)
-school$CHARTER = ifelse(is.na(school$CHARTER), "NC", school$CHARTER)
-
-# Need to investigate GR_TARG
-#levels(as.factor(school$GR_TARG))
-
-# we want to examine which columns is filled with NA data
-# we only want to look at data that is at least half filled
-ncol(school)
-sumval = rep(0, ncol(school))
-valcold = rep(FALSE, ncol(school))
-
-
-for (col in 1:ncol(school)) {
-  sumval[col] = sum(!is.na(school[, col]) )
-  valcold[col] = as.logical(sumval[col] > nrow(school)/2)
-}
-
-valcoln = colnames(school[0,])[valcold]
-valcoln
-
-# we only select columns with data filled
-school = school[,valcold]
-ncol(school)
-```
-
-
-```{r}
-
-# convert predictors to factors
-# not including API_TARG
+# Define some common columns
+# Factor Columns
 fac_pred = c('RTYPE', 'STYPE', 'SPED', 'SIZE', 'CHARTER', 
-             "GR_TARG", "AS_GT", "YR_RND")
+             "YR_RND")
 
-levels(as.factor(school$ST_RANK))
-
-# conver predictors to numerics
-# Note we purposely leave out AA_NUM, AA_SIG because they are related to PCT_AA
-# could consider adding AA_API etc
+# Numeric Columns
 num_pred = c("ST_RANK", "SIM_RANK",
-             "API10B", 
+             "API10", "API13",
+             "CDS",
              "AA_API", "AI_API", "AS_API", "FI_API", "HI_API", "PI_API", "WH_API", "MR_API",
              "SD_API", "EL_API", "DI_API",
              "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI","PCT_PI", "PCT_WH", "PCT_MR",
              "MEALS", "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", "CBMOB", "DMOB", 
              "ACS_K3", "ACS_46", "ACS_CORE", 
              "PCT_RESP", "NOT_HSG", "HSG", "SOME_COL", "COL_GRAD", "GRAD_SCH", "AVG_ED",
-             "PEN_2", "PEN_35", "PEN_6", "PEN_78", "PEN_91",
-             "ENROLL", "PARENT_OPT", "TESTED", "SCI"
+             "PEN_2", "PEN_35", "PEN_6", "PEN_78", "PEN_911","PEN_91",
+             "ENROLL", "TESTED", "SCI"
              )
-# Only select columns we are interested in
-school = subset(school, select = colnames(school[0, ]) %in% c(fac_pred, num_pred))
-
-# Now we eliminate any observations that doesn't have all data filled
-nrow(school)
-ncol(school)
-colnames(school[0,])
-school = na.omit(school)
-(n = nrow(school))  
-ncol(school)
-
-
-# convert all columns listed in fac_pred to factors
-for(col in fac_pred) {
-  if(col %in% colnames(school[0,])) {
-    school[, col] = as.factor(school[, col])
-  }
-}
-
-# convert all columns listed in num_pred to numerics
-for(col in num_pred) {
-  if(col %in% colnames(school[0,])) {
-    school[, col] = as.numeric(school[, col])
-  }
-}
-
-# the rest of PCT_* add up to 100%
-PCT_ALL = school$PCT_AA + school$PCT_AI + school$PCT_AS + school$PCT_FI + school$PCT_HI + school$PCT_PI + school$PCT_WH + school$PCT_MR
-hist(PCT_ALL)
-#pct_mr_idx = which(colnames(school[0,]) == "PCT_MR")
-#school = school[0, -pct_mr_idx]
-
-# parents' education info adds up to 100%
-ED_ALL = school$NOT_HSG + school$HSG + school$SOME_COL + school$COL_GRAD + school$GRAD_SCH 
-hist(ED_ALL)
-
-# percentage of school enrollment adds up to PEN_ENROLL
-PEN_ALL = school$PEN_2 + school$PEN_35 + school$PEN_6 + school$PEN_78 + school$PEN_91 
-hist(PEN_ALL)
-
-# enrolled and tested are highly correlated as well
-cor(school$ENROLL, school$TESTED)
-
-# split dataframe into training and test
-n = nrow(school)
-trn_idx = sample(nrow(school), n/2)
-school_trn = school[trn_idx, ]
-school_tst = school[-trn_idx, ]
 ```
 
 ```{r}
-# include necessary library
-library(lmtest)
-library(faraway)
 
-# define helper function
+###################
+# Helper Functions
+###################
+
+# Function to remove exact column names
+remove_columns = function(dframe, columns_to_remove) {
+  subset(dframe, select = !(colnames(dframe) %in% columns_to_remove))
+}
+
+# Function to remove matching column names
+remove_columns_like = function(dframe, columns_to_remove) {
+  tmp_df = data.frame(dframe)
+  for(match in columns_to_remove) {
+    tmp_df = subset(tmp_df, select = -grep(match, colnames(tmp_df), perl=TRUE, value=FALSE))
+  }
+  tmp_df
+}
+
+# threshold is a number from 0 to 1 to indicate how much NA you want to see
+# threshold = 0.7 means show columns with 70% NAs
+show_columns_with_na = function(dframe, threshold = 0.5) {
+  cn = colnames(dframe)
+  col_na_ratios = rep(0, length(cn))
+  for(c in 1:length(cn)) {
+    col_na_ratios[c] = mean(is.na(dframe[,cn[c]]))
+  }
+  print(cn[col_na_ratios > threshold])
+  cn[col_na_ratios > threshold]
+}
+
+# Remove columns common in dataset
+remove_common_columns = function(dframe) {
+  # Remove all _TARG, _MET, _SIG, columns which are just metadata about whether targets were met
+  # or whether columns were significant.
+  dframe = remove_columns_like(dframe, c("_TARG", "_MET", "_SIG", "_NUM", "_GROW"))
+
+  dframe$CHARTER = ifelse(is.na(dframe$CHARTER), "NC", dframe$CHARTER)
+
+  # Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+
+  # Transform STYPE column by setting NA to 'O' to indicate other
+  data_2013$STYPE = as.factor(ifelse(is.na(data_2013$STYPE), "O", data_2013$STYPE))
+
+  # Remove the names because we have the school id in the first column
+  dframe = remove_columns(dframe, c("SNAME", "DNAME", "CNAME"))
+
+  # Remove rows with AVG_ED = NA because there's not that much of them (37)
+  dframe = subset(dframe, subset = !is.na(dframe$AVG_ED))
+
+  # Remove ACS_K3, ACS_46, ACS_CORE, FULL, EMER because it's mostly if not all is NA
+  dframe = remove_columns(dframe, c("ACS_K3", "ACS_46", "ACS_CORE", "FULL", "EMER"))
+
+  dframe
+}
+
+# convert all columns listed in fac_pred to factors
+conv_factor = function(dframe, columns_to_factor) {
+  for(col in columns_to_factor) {
+    if(col %in% colnames(dframe[0,])) {
+      dframe[, col] = as.factor(dframe[, col])
+    }
+  }
+  dframe
+}
+
+# convert all columsn to numeric
+conv_numeric = function(dframe, columns_to_numeric) {
+  for(col in num_pred) {
+    if(col %in% colnames(dframe[0,])) {
+      dframe[, col] = as.numeric(dframe[, col])
+    }
+  }
+  dframe
+}
+
+# Function to calculate loocv_rmse
 calc_loocv_rmse = function(model) {
   sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
 }
 
-#pairs(school_trn)
-#str(school_trn)
-#(unique(as.numeric(cor(school_trn[,num_pred]))))
-#GR_TARG causing problem when predicting
-# leaving out PCT_MR, PEN_91, and NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they add up to 100%
-schl_mod = lm(API10B ~ #.,
-                (STYPE + CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
-                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + #PCT_MR +
-                MEALS + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI +
-                CBMOB + #DMOB + 
-                PCT_RESP + 
-                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
-                PEN_2 + PEN_35 + PEN_6 + PEN_78 + #PEN_91 +
-                ENROLL + #TESTED + 
-                  PARENT_OPT  + YR_RND #+ SCI
-                ) ,#^ 2,
-              data = school_trn)
+diagnostics = function(model, pcol = "grey", lcol = "dodgerblue", alpha = 0.05, 
+                       plotit = TRUE, testit = TRUE) {
+  
+  if (plotit == TRUE) {
+    
+    # side-by-side plots (one row, two columns)
+    par(mfrow = c(1, 2))
+    
+    # fitted versus residuals
+    plot(fitted(model), resid(model), 
+         col = pcol, pch = 20, cex = 1.5, 
+         xlab = "Fitted", ylab = "Residuals", 
+         main = "Fitted versus Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    grid()
+    
+    # qq-plot
+    qqnorm(resid(model), col = pcol, pch = 20, cex = 1.5)
+    qqline(resid(model), col = lcol, lwd = 2)
+    grid()
+  }
+  
+  if (testit == TRUE) {
+    # p-value and decision
+    shapiro_pval = shapiro.test(resid(model))$p.value
+    bptest_pval = bptest((model))$p.value
+    list(shapiro_pval = shapiro_pval, bptest_pval = bptest_pval)
+  }
 
-# Check assumptions
-bptest(schl_mod)
-shapiro.test(resid(schl_mod))
-qqnorm(resid(schl_mod))
-qqline(resid(schl_mod))
-
-# Check how well the model is fitting
-summary(schl_mod)
-#length(coef(schl_mod)) - 1
-vif(schl_mod)
-
-pred_api = predict(schl_mod, newdata = school_tst)
-plot(pred_api ~ school_tst$API10B)
-
-calc_loocv_rmse(schl_mod)
-plot(fitted(schl_mod) , resid(schl_mod))
-
+}
 ```
 
 ```{r}
-schl_aic = step(schl_mod, direction = "backward", trace = FALSE, maxit = 50)
+#############################
+# Clean up data set 2010
+#############################
+# remove comoonly removable columns
+schl2010 = remove_common_columns(schl2010)
+
+# Remove columns unique to the dataset
+# _api is related to API which we are trying to measure
+schl2010 = remove_columns_like(schl2010, c("_api10", "_API09"))
+
+# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+schl2010 = subset(schl2010, subset = is.na(schl2010$sm10) & is.na(schl2010$sm09), select = !(colnames(schl2010) %in% c('sm10','sm09')))
+
+# Remove rows with MEDIAN13 or MEDIAN12 = NA
+schl2010 = subset(schl2010, subset = !is.na(schl2010$MEDIAN10) | !is.na(schl2010$MEDIAN09))
+
+
+# Remove schl2010 rank that are I = Invalid, B = District, or C = Special Education schl2010
+#schl2010 = schl2010[!(schl2010$ST_RANK %in% c("I", "B", "C")), ]
+
+# Remove schl2010 similar rank that are I = Invalid, B = District, or C = Special Education schl2010
+#schl2010 = schl2010[!(schl2010$SIM_RANK %in% c("I", "B", "C", "O", "S")), ]
+
+other_cols = show_columns_with_na(schl2010)
+schl2010 = remove_columns(schl2010, other_cols)
+schl2010 = na.omit(schl2010)
+nrow(schl2010)
+
+#############################
+# Clean up data set 2013
+#############################
+# remove comoonly removable columns
+schl2013 = remove_common_columns(schl2013)
+
+# Remove columns unique to the dataset
+# _api is related to API which we are trying to measure
+schl2013 = remove_columns_like(schl2013, c("_API12", "_API13"))
+
+# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+schl2013 = subset(schl2013, subset = is.na(schl2013$SM12) & is.na(schl2013$SM13), select = !(colnames(schl2013) %in% c('SM12','SM13')))
+
+# Remove rows with MEDIAN13 or MEDIAN12 = NA
+schl2013 = subset(schl2013, subset = !is.na(schl2013$MEDIAN13) | !is.na(schl2013$MEDIAN12))
+
+other_cols = show_columns_with_na(schl2013)
+schl2013 = remove_columns(schl2013, other_cols)
+schl2013 = na.omit(schl2013)
+nrow(schl2013)
+schl2013 = na.omit(schl2013)
+```
+
+
+```{r}
+
+#####################
+# Convert columns to factors and numerics for 2010
+####################
+# convert columns to factor
+schl2010 = conv_factor(schl2010, fac_pred)
+
+# convert columns to numeric
+schl2010 = conv_numeric(schl2010, num_pred)
+
+# Randomly select 600 observations
+#nrow(schl2010)
+ridx = sample(nrow(schl2010), 600)
+schl2010 = schl2010[ridx, ]
+
+# split dataframe into training and test
+(n = nrow(schl2010))
+trn_idx = sample(nrow(schl2010), n/2)
+schl2010_trn = schl2010[trn_idx, ]
+schl2010_tst = schl2010[-trn_idx, ]
+
+
+#####################
+# Convert columns to factors and numerics for 2013
+####################
+# convert columns to factor
+schl2013 = conv_factor(schl2013, fac_pred)
+
+# convert columns to numeric
+schl2013 = conv_numeric(schl2013, num_pred)
+
+# Randomly select 600 observations
+ridx = sample(nrow(schl2013), 600)
+schl2013 = schl2013[ridx, ]
+
+# split dataframe into training and test
+(n = nrow(schl2013))
+trn_idx = sample(nrow(schl2013), n/2)
+schl2013_trn = schl2013[trn_idx, ]
+schl2013_tst = schl2013[-trn_idx, ]
+```
+
+
+
+
+
+```{r}
+#################
+# 2010
+#################
+# schl2010_fit = lm(API10  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
+#                data = schl2010_trn)
+
+schl2010_fit = lm(API10  ~  PEN_2  +  PEN_35   +  PEN_6   + PEN_78  +  PCT_AA  +  P_RFEP  +    P_DI   +   P_EL    + CBMOB + AVG_ED +  ENROLL, data = schl2010_trn)
+  
+  
+# check assumptions
+diagnostics(schl2010_fit)
+
+# check how the model is fitting
+summary(schl2010_fit)
+vif(schl2010_fit) 
+calc_loocv_rmse(schl2010_fit)
+
+pred = predict(schl2010_fit, newdata = schl2010_tst)
+plot(pred ~ schl2010_tst$API10, col = "dodgerblue")
+
+#################
+# 2013
+#################
+# schl2013_fit = lm(API13  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + MEALS ,
+#                data = schl2013_trn)
+schl2013_fit = lm(API13  ~  PEN_2  +  PEN_35   +  PEN_6   + PEN_78  +  PCT_AA  +  P_RFEP  +    P_DI   +   P_EL    + CBMOB + AVG_ED +  ENROLL, data = schl2013_trn)
+
+# check assumptions
+diagnostics(schl2013_fit)
+
+# check how the model is fitting
+summary(schl2013_fit)
+vif(schl2013_fit) 
+calc_loocv_rmse(schl2013_fit)
+
+pred = predict(schl2013_fit, newdata = schl2013_tst)
+plot(pred ~ schl2013_tst$API13, col = "dodgerblue")
+```
+
+```{r}
+# we leave out STYPE because it can be represented by student enrollment per grade (PEN_2..)
+# we leaving out NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they can be represented by AVG_ED
+# We leave out TESTEd because it's highly related with ENROLL
+schl_big_mod = lm(API10 ~ #.,
+                (PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 +
+                   CDS +
+                   CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
+                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_MR + PCT_WH + 
+                MEALS +  # MEALS is highly correlated with AVG_ED
+                  P_GATE + P_MIGED + P_RFEP + P_DI +  P_EL +
+                CBMOB + DMOB + 
+                PCT_RESP + 
+                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
+                ENROLL # #TESTED +#highly correlated with ENROLL
+                   #+ YR_RND #+ SCI depends on API
+                ) ,
+              data = schl2010_trn)
+
+nrow(schl2010_trn)
+ncol(schl2010_trn)
+# Check assumptions
+bptest(schl_big_mod)
+shapiro.test(resid(schl_big_mod))
+
+# Check how well the model is fitting
+summary(schl_big_mod)
+vif(schl_big_mod)
+
+schl_aic = step(schl_big_mod, direction = "backward", k = log(n), trace = FALSE, maxit = 100)
 
 # check assumptions
 bptest(schl_aic)
 shapiro.test(resid(schl_aic))
-qqnorm(resid(schl_aic))
-qqline(resid(schl_aic))
 
 # check how the model is fitting
 summary(schl_aic)
-#length(coef(schl_aic)) - 1
-vif(schl_aic)
-#(col = colnames(school[,which(vif(schl_aic) < 5)]))
-calc_loocv_rmse(schl_mod)
-plot(fitted(schl_aic) , resid(schl_aic))
-
-
+vif(schl_aic) 
 ```
-
-```{r}
-sum(cooks.distance(schl_aic) > 4/nrow(school_trn))
-#sum(hatvalues())
-schl_novif = lm(API10B ~  PCT_AA +   PCT_AI  +  PCT_AS  +  PCT_FI  +   MEALS +   P_GATE  + P_MIGED   +   P_EL +
-                  P_DI   +  CBMOB + PCT_RESP  +  AVG_ED   +  PEN_2 +   PEN_35   +  PEN_6  +  PEN_78,
-                select = cooks.distance(schl_aic) <= 4/nrow(school_trn),
-                data = school_trn)
-#schl_aic = step(schl_mod, direction = "both", trace = FALSE, maxit = 50)
-
-# check assumptions
-bptest(schl_novif)
-shapiro.test(resid(schl_novif))
-qqnorm(resid(schl_novif))
-qqline(resid(schl_novif))
-
-# check how the model is fitting
-summary(schl_novif)
-#length(coef(schl_aic)) - 1
-vif(schl_novif)
-calc_loocv_rmse(schl_novif)
-plot(fitted(schl_novif) , resid(schl_novif))
-```
-
 ### Methodology
 
 - Split data into charter and non-charter.
