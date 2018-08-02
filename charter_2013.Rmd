@@ -372,6 +372,44 @@ car::vif(model_opt2)
 
 Even though the bptest rejected the null hypothesis of a constant variance, the `Fitted vs Residual` plot doesn't show any discernible patterns. The Shapiro test failed to reject the null hypothesis that the data was sampled from a normal distribution. The `vif()` check doesn't show collinearity for any of the final set of predictors. The QQ-Plot looks good.
 
-In the end, the largest influence on the overall performance for 2013 seems to be whether the student doesn't skip school day for more than 30 consecutive days from when the school starts.
+When this script is run repeatedly, there are two large influencers that emerge. One case looks like this:
+```{r}
+final1 = lm(API13 ~ log(PCT_AA) + PCT_FI + PCT_HI + PCT_PI + 
+              log(P_MIGED) + log(CBMOB) + ACS_46 + ACS_CORE + HSG + AVG_ED + 
+              EMER + CWS_91 + CW_CSTH + CW_CHSM, data=no_outlier_data)
+bptest(final1)
+shapiro.test(resid(final1))
+qqnorm(resid(final1))
+qqline(resid(final1))
+plot(resid(final1), fitted(final1))
+summary(final1)$adj  
+coef(final1)
+```
+
+The other case looks like this:
+```{r}
+final2 = lm(API13 ~ CHARTER + log(PCT_AA) + PCT_FI + PCT_HI + 
+              PCT_PI + log(P_DI) + ACS_46 + ACS_CORE + GRAD_SCH + AVG_ED + 
+              EMER + CWS_91 + CW_CHSM + CW_SCI, data=no_outlier_data)
+bptest(final2)
+shapiro.test(resid(final2))
+qqnorm(resid(final2))
+qqline(resid(final2))
+plot(resid(final2), fitted(final2))
+summary(final2)$adj 
+coef(final2)
+```
+
+
+In the end:
+
+* positive influence on the overall performance for 2013 seems to be whether the student doesn't skip school day for more than 30 consecutive days from when the school starts, and the parent's education level
+* negative influencers include whether the school is a charter school or not, and the presence of some disadvantaged minority and ethnic groups
+
+It's important to note that these influencers illustrate correlation and not causation.
+
+
+
+
 
 
