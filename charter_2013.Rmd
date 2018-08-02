@@ -192,20 +192,186 @@ plot(resid(model_sel), fitted(model_sel))
 BPTest and Shapiro Test
 ```{r}
 bptest(model_sel)
-
 shapiro.test(resid(model_sel)[1:3000])
 ```
 
-It passes the Breusch-Pagan test with a p-value << 0.05. It also passed the Shapiro test with a significant p-value.
+The tests for normality fail. We must now see if we can reduce the model to one that is normally distributed.
 
 
-### Report on Model
+### Normality Adjustments
 ```{r}
 summary(model_sel)
 ```
 
-Finally, we report on the predictors that were relevant for 2013 in influencing performance. This is correlation and not causation. 
+The last three columns look suspicious. 
+```{r}
+unique(data_2013$CWM2_28)
+unique(data_2013$CWM2_91)
+unique(data_2013$CWS2_91)
+sum(data_2013$CWM2_28==1)
+sum(data_2013$CWM2_28==2)
+sum(data_2013$CWM2_28==3)
+sum(data_2013$CWM2_28==4)
 
-We explore how performance could be improved in the future by tweaking the predictor variables.
+# Remove these columns from the model and re-fit
+model_init = lm(formula = API13 ~ STYPE + CHARTER + VALID + PCT_AA + PCT_AI + 
+    PCT_AS + PCT_FI + PCT_HI + PCT_PI + PCT_WH + PCT_MR + MEALS + 
+    P_MIGED + P_DI + CBMOB + DMOB + ACS_K3 + ACS_46 + ACS_CORE + 
+    NOT_HSG + HSG + SOME_COL + GRAD_SCH + AVG_ED + FULL + EMER + 
+    PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 + ENROLL + PAR_OPT + 
+    CW_CSTE + CWS_91 + CW_CSTH + CW_CHSM + CW_SCI, data = data_2013)
+model = step(model_init, trace=0)
+summary(model)
+bptest(model)
+shapiro.test(resid(model)[1:3000])
+qqnorm(resid(model))
+qqline(resid(model))
+plot(resid(model), fitted(model))
+```
+
+Next we look at the `pairs` plot to see if any of the predictors are collinear.
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'VALID', 'PCT_AA', 'PCT_AI')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'PCT_AS', 'PCT_FI', 'PCT_HI')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'MEALS', 'P_MIGED', 'P_DI')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'CBMOB', 'DMOB', 'ACS_K3')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'ACS_46', 'ACS_CORE', 'NOT_HSG')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'HSG', 'SOME_COL', 'GRAD_SCH')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'AVG_ED', 'FULL', 'EMER')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'PEN_2', 'PEN_35', 'PEN_6')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'PEN_78', 'PEN_911', 'ENROLL')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'PAR_OPT', 'CW_CSTE', 'CWS_91')))
+```
+
+```{r}
+pairs(subset(data_2013,select=c('API13', 'CW_CSTH', 'CW_CHSM', 'CW_SCI')))
+```
+
+It looks like the following fields may be collinear: DMOB with CBMOB, PEN_2 with PEN_35, PEN_6, PEN_78, and PEN_911. The collinear columns will be removed.
+
+The following fields look like they can use a `log()` transform: PCT_AA, PCT_AS, P_MIGED, P_DI, CBMOB, and FULL. 
+
+### Striated Sub-Sampling
+
+```{r}
+# Apply backwards AIC to the given model and plot the QQPlot and residual vs fitted
+model_it = function(a_model) {
+  opt_model = step(a_model, trace=0)
+  qqnorm(resid(opt_model))
+  qqline(resid(opt_model))
+  plot(resid(opt_model), fitted(opt_model))
+  opt_model
+}
+
+```
+
+```{r}
+# Data still not passing normality tests.
+# Try striated partitions: 30 random samples for range 11-598
+randomly_select = function(dframe, no_to_select) {
+  dframe[sample(nrow(dframe), no_to_select), ] # it's up to the caller to make sure there are enough rows
+}
+
+no_bins  = 20 # decide on how big to make the bins
+bin_size = 30 # number of rows to have in each bin
+range_response = range(data_2013$API13)
+response_interval = (range_response[2] - range_response[1])/no_bins
+no_breaks = seq(range_response[1], range_response[2], by=response_interval)
+
+reduced_data = data.frame(data_2013[0,]) # First add the column headers only
+for(i in seq(range_response[1], range_response[2], by=response_interval)) {
+  no_rows_in_interval = nrow(data_2013[data_2013$API13 >= i & data_2013$API13 < (i + response_interval),])
+  print(paste(i,' => ',no_rows_in_interval,' elts'))
+  if (no_rows_in_interval > bin_size) {
+    reduced_data = rbind(reduced_data, 
+                         randomly_select(subset(data_2013, 
+                                                subset = data_2013$API13 >= i & data_2013$API13 < (i + response_interval)),
+                                         bin_size))
+  } else { # add the entire bin to the resulting dataset
+    reduced_data = rbind(reduced_data,
+                         subset(data_2013, 
+                                subset = data_2013$API13 >= i & data_2013$API13 < (i + response_interval)))
+  }
+}
+hist(data_2013$API13,breaks = no_breaks)
+hist(reduced_data$API13)
+print(paste('Reduced model has',nrow(reduced_data),'rows'))
+```
+
+
+```{r}
+# Test reduced model; STYPE and VALID showed high collinearity in a VIF output so those were removed
+model_init = lm(API13 ~ CHARTER + log(PCT_AA) + PCT_AI + 
+                  log(PCT_AS) + PCT_FI + PCT_HI + PCT_PI + PCT_WH + PCT_MR + MEALS + 
+                  log(P_MIGED) + log(P_DI) + log(CBMOB) + ACS_K3 + ACS_46 + ACS_CORE + 
+                  NOT_HSG + HSG + SOME_COL + GRAD_SCH + AVG_ED + log(FULL) + EMER + 
+                  ENROLL + PAR_OPT + 
+                  CWS_91 + CW_CSTH + CW_CHSM + CW_SCI, data = reduced_data)
+print("Model Optimization 1")
+model_opt1 = model_it(model_init)
+summary(model_opt1)
+bptest(model_opt1)
+shapiro.test(resid(model_opt1))
+
+print("After cooks distance applied")
+cd = cooks.distance(model_opt1)
+no_outlier_data = subset(reduced_data, subset = cd < 3/length(cd)) # using an aggressive cooks distance criteria
+print(paste(nrow(no_outlier_data),"rows left"))
+
+model_init2 = lm(API13 ~ CHARTER + log(PCT_AA) + PCT_AI + 
+                   log(PCT_AS) + PCT_FI + PCT_HI + PCT_PI + PCT_WH + PCT_MR + MEALS + 
+                   log(P_MIGED) + log(P_DI) + log(CBMOB) + ACS_K3 + ACS_46 + ACS_CORE + 
+                   NOT_HSG + HSG + SOME_COL + GRAD_SCH + AVG_ED + log(FULL) + EMER + 
+                   ENROLL + PAR_OPT + 
+                   CWS_91 + CW_CSTH + CW_CHSM + CW_SCI, data = no_outlier_data)
+print("Model Optimization 2")
+model_opt2 = model_it(model_init2)
+summary(model_opt2)
+bptest(model_opt2)
+shapiro.test(resid(model_opt2))
+
+```
+```{r}
+# check collinearity
+car::vif(model_opt2)
+```
+
+## Conclusions 2013
+
+Even though the bptest rejected the null hypothesis of a constant variance, the `Fitted vs Residual` plot doesn't show any discernible patterns. The Shapiro test failed to reject the null hypothesis that the data was sampled from a normal distribution. The `vif()` check doesn't show collinearity for any of the final set of predictors. The QQ-Plot looks good.
+
+In the end, the largest influence on the overall performance for 2013 seems to be whether the student doesn't skip school day for more than 30 consecutive days from when the school starts.
 
 
