@@ -27,6 +27,7 @@ install.packages("foreign")
 ```
 
 ```{r}
+set.seed(42)
 data_2013 = read.dbf("data/api13gdb.dbf")
 ```
 
@@ -304,30 +305,34 @@ randomly_select = function(dframe, no_to_select) {
   dframe[sample(nrow(dframe), no_to_select), ] # it's up to the caller to make sure there are enough rows
 }
 
-no_bins  = 20 # decide on how big to make the bins
-bin_size = 30 # number of rows to have in each bin
-range_response = range(data_2013$API13)
-response_interval = (range_response[2] - range_response[1])/no_bins
-no_breaks = seq(range_response[1], range_response[2], by=response_interval)
+striation_subsample = function(dframe, response, no_bins = 20, bin_size = 30) {
+  range_response = range(dframe[, response])
+  response_interval = (range_response[2] - range_response[1])/no_bins
+  no_breaks = seq(range_response[1], range_response[2], by=response_interval)
+  
+  reduced_data = data.frame(dframe[0,]) # First add the column headers only
+  for(i in seq(range_response[1], range_response[2], by=response_interval)) {
+    interval_rows = dframe[, response] >= i & dframe[, response] < (i + response_interval)
 
-reduced_data = data.frame(data_2013[0,]) # First add the column headers only
-for(i in seq(range_response[1], range_response[2], by=response_interval)) {
-  no_rows_in_interval = nrow(data_2013[data_2013$API13 >= i & data_2013$API13 < (i + response_interval),])
-  print(paste(i,' => ',no_rows_in_interval,' elts'))
-  if (no_rows_in_interval > bin_size) {
-    reduced_data = rbind(reduced_data, 
-                         randomly_select(subset(data_2013, 
-                                                subset = data_2013$API13 >= i & data_2013$API13 < (i + response_interval)),
-                                         bin_size))
-  } else { # add the entire bin to the resulting dataset
-    reduced_data = rbind(reduced_data,
-                         subset(data_2013, 
-                                subset = data_2013$API13 >= i & data_2013$API13 < (i + response_interval)))
+    no_rows_in_interval = nrow(dframe[interval_rows,])
+
+    print(paste(i,' => ',no_rows_in_interval,' elts'))
+    if (no_rows_in_interval > bin_size) {
+      reduced_data = rbind(reduced_data, 
+                           randomly_select(subset(dframe, subset = interval_rows),
+                                           bin_size))
+    } else { # add the entire bin to the resulting dataset
+      reduced_data = rbind(reduced_data,
+                           subset(dframe, subset = interval_rows))
+    }
   }
+  print(paste('Reduced model has',nrow(reduced_data),'rows'))
+  reduced_data
 }
-hist(data_2013$API13,breaks = no_breaks)
+
+hist(data_2013$API13)
+reduced_data = striation_subsample(data_2013, 'API13', 20, 30)
 hist(reduced_data$API13)
-print(paste('Reduced model has',nrow(reduced_data),'rows'))
 ```
 
 
@@ -367,6 +372,8 @@ shapiro.test(resid(model_opt2))
 # check collinearity
 car::vif(model_opt2)
 ```
+
+
 
 ## Conclusions 2013
 
