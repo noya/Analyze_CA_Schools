@@ -1,0 +1,183 @@
+---
+title: "School Data 2006"
+author: "Irina"
+date: "August 1, 2018"
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE,include=FALSE}
+install.packages("foreign")
+```
+```{r}
+library(foreign)
+library(lmtest)
+library(faraway)
+```
+
+We will Growth API score, coded in the data as "API<YY>", as a response variable for this analysis.
+
+##Cleaning the data
+**Loading the raw data**
+
+```{r}
+data_2006 = read.dbf("api06gdb.dbf", as.is = TRUE)
+dim(data_2006)
+```
+```{r eval=FALSE,include=FALSE}
+View(data_2006)
+```
+
+Helper functions:
+```{r}
+#Helper function to remove columns by name (also works on part of column name)
+remove_columns = function(dframe, columns_to_remove){
+  dframe[-grep(paste(columns_to_remove, collapse = "|"), names(dframe), ignore.case = TRUE)]
+}
+```
+```{r}
+#Helper function to run diagnostics
+diagnostics = function(dframe, model, alpha = 0.05) {
+  p_val_bp = bptest(model)$p.value
+  decision_bp = ifelse(p_val_bp < alpha, "Fail BP test", "Pass BP test")
+  residuals = resid(model)
+  if(length(residuals) > 5000){
+    sample_idx = sample(nrow(dframe), 5000)
+    residuals = residuals[sample_idx]
+  }
+  p_val_shapiro = shapiro.test(residuals)$p.value
+  decision_shapiro = ifelse(p_val_shapiro < alpha, "Fail Shapiro-Wilk test", "Pass Shapiro-Wilk test")
+  list(p_val_shapiro = p_val_shapiro, decision_shapiro = decision_shapiro, p_val_bp = p_val_bp, decision_bp = decision_bp)
+}    
+
+```
+
+**Processing the data**
+
+- Remove fields that will not be used in the analysis
+
+```{r}
+#remove fields related to API, its calculation and its growth
+data_2006 = remove_columns(data_2006, c('TARG', '_GROW', '_MET', 'SCH_WIDE', 'API05', '_API06','_API05','COMP_IMP', 'BOTH', 'TARGET', 'GROWTH', '_NUM', '_SIG', 'VALID', 'MEDIAN06', 'MEDIAN05','AA_NUM','AI_NUM','AS_NUM','FI_NUM','HI_NUM','PI_NUM', 'WH_NUM', 'FLAG', 'PCT_RESP'))
+
+#remove fields related to test scores and their calculations, since they serve as a basis of calculating API and will be highly correlated with API score
+data_2006 = remove_columns(data_2006, c('_E28','_E91', 'CW_', '_M28','_M91','_S28','_S91','_H28','_H91','_R28','_L28','_S28','_M28','VCHS_','PCHS_','TOT_'))
+
+#remove fields related to number of students tested/scores 
+data_2006 = remove_columns(data_2006, c('Tested','PAR_OPT'))
+
+#remove fields containing school, district and county names , school type, schoold code and percent of enrollments
+data_2006 = remove_columns(data_2006, c('STYPE', 'SPED', 'SNAME', 'DNAME', 'CNAME', 'CDS', 'PEN_', 'ENROLL'))
+
+```
+
+- Check for missing or erroneous data and remove missing observations
+
+```{r}
+#Dealing with missing data.
+
+#Remove observations that don't have an API score
+data_2006 = data_2006[!is.na(data_2006$API06),]
+
+#Remove schools designated as small for GROWTH and BASE purposes
+data_2006 = subset(data_2006, subset = is.na(data_2006$sm05) & is.na(data_2006$sm06), select = !(colnames(data_2006) %in% c('sm05','sm06')))
+
+# Remove schools with SIZE = S or T which indicate non-valid API scores
+data_2006 = subset(data_2006, subset = !(data_2006$SIZE %in% c("S","T")), select =!(colnames(data_2006) %in% c('SIZE')))
+
+#We are only interested in looking at data at the school level, so removing rows related to district and state data
+data_2006 = subset(data_2006, subset = (data_2006$RTYPE == "S"), select =!(colnames(data_2006) %in% c('RTYPE')))
+
+# Remove rows with YR_RND = Yes because they have mostly NA columns
+data_2006 = subset(data_2006, subset = data_2006$YR_RND != 'Yes', select =!(colnames(data_2006) %in% c('YR_RND')))
+
+#Remove rows with invalid data for parent education ("0" is most likely missing data)
+data_2006 = subset(data_2006, subset = AVG_ED != 0)
+
+dim(data_2006)
+
+```
+
+- Convert to numeric and factor variables
+
+```{r}
+#Converting non-charter (originally designated as "NA") to "N"
+data_2006$CHARTER = as.factor(ifelse(is.na(data_2006$CHARTER), "N", "Y"))
+
+#Converting the rest of variables to numeric
+cols_factor = which(names(data_2006) %in% c('CHARTER'))
+data_2006[,-c(cols_factor)] <- sapply(data_2006[,-c(cols_factor)], as.numeric)
+str(data_2006)
+
+```
+
+```{r}
+#Check proportion of missing data in each column
+sapply(data_2006, function(x) mean (is.na(x)))
+
+```
+```{r}
+#There is a large percent of missing values in "Class size" variables, so we have to remove them.
+data_2006 = remove_columns(data_2006, c('ACS_'))
+```
+
+##Building a model##
+
+Using backward BIC selection
+```{r}
+mod_full = lm(API06 ~ ., data = data_2006)
+mod_back_bic = step(mod_full, k = log(nrow(data_2006)), trace = 0)
+summary(mod_back_bic)
+diagnostics(data_2006, mod_back_bic)
+
+```
+Performing Box-Cox transformation of the response
+```{r}
+library( MASS )
+boxcox(mod_back_bic, plotit = TRUE, lambda = seq(0, 5, by = 0.1))
+```
+
+```{r}
+mod_cox = lm((API06 ^ 2.1 - 1)/2.1 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + 
+    MEALS + P_FDAY + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + 
+    CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
+    FULL + EMER, data = data_2006)
+summary(mod_cox)
+diagnostics(data_2006, mod_cox)
+```
+Removing influential observations
+
+```{r}
+cd = cooks.distance(mod_cox)
+mod_new = lm((API06 ^ 2.1 - 1)/2.1 ~ PCT_AI + PCT_AS + PCT_HI + PCT_WH + 
+    MEALS + P_FDAY + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + 
+    CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
+    FULL + EMER, data = data_2006, subset = cd < 4 / length(cd))
+summary(mod_new)
+```
+
+##Performing model diagnostics##
+
+```{r}
+#Running diagnostics
+diagnostics(data_2006, mod_new)
+
+par(mfrow = c(1, 2))
+qqnorm(resid(mod_new), col = "darkgrey")
+qqline(resid(mod_new), col = "coral", lwd = 2)
+
+plot(fitted(mod_new), resid(mod_new), col = "darkgrey", pch = 20, xlab = "Fitted", ylab = "Residual", main = "Fitted vs. Residual Plot")
+abline(h = 0, col = "coral", lwd = 2)
+
+#Checking for collinearity issues
+vif(mod_new)
+
+```
+
