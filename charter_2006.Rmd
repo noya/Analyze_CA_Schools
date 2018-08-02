@@ -193,7 +193,10 @@ diagnostics(mod_new)
 
 ```{r}
 # Ordinary least-squares with no weights
-model1 = lm( API06 ~ . , data = data_2006 )
+model1 = lm( API06 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + 
+    MEALS + P_FDAY + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + 
+    CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
+    FULL + EMER, data = data_2006 )
 diagnostics(model1, plotit = FALSE)
 
 # Estimate log of error variance from residuals^2
@@ -201,7 +204,10 @@ diagnostics(model1, plotit = FALSE)
 var1 <- smooth.spline(x=model1$fitted.values, y=log( residuals(model1)^2 ), cv=TRUE)
 
 # Use 1/variance = 1/exp(var1$y) to define weights for weighted least-squares
-model2 = lm( API06 ~ . , weights=1/exp( predict( var1, x=model1$fitted.values )$y ), data = data_2006 )
+model2 = lm( API06 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + 
+    MEALS + P_FDAY + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + 
+    CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
+    FULL + EMER, weights=1/exp( predict( var1, x=model1$fitted.values )$y ), data = data_2006 )
 summary(model2)
 
 plot(fitted(model2), resid(model2) / sqrt( exp( predict( var1, x=model1$fitted.values )$y ) ), col = "darkgrey", pch = 20, xlab = "Fitted", ylab = "Residual", main = "Fitted vs. Residual Plot")
