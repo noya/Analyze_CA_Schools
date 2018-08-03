@@ -11,13 +11,13 @@ urlcolor: cyan
 
 ## Introduction
 
-This study is to explore the different factors that affects a student's test score. We want to come up with a model that helps us explain the student's test score with these factors, and use the model to predict the student's performance. We want to see how this model changes over 9 years, each data set 3 years apart. 
+As part of California's accountability program, the state Deptarment of Education measures student academic performance and its growth. To achieve this goal, from 1999-2013, the California Department of Education annually calculated the Academic Performance Index (API) for all public schools. These data sets are publicly available at the California Department of Education web site, https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. 
 
-Specifically, the data set that we will use comes from https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. We will use the "2004 Growth API", "2007 Growth API", "2010 Growth API", and the "2013 Growth API".
+In addition to API scores, the dataset contains the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
 
-The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+This study explores the different factors that affect a student's test score. We want to come up with a model that helps us explain the student's test score with these factors, and use the model to predict the student's performance. We want to see how this model changes over 9 years, so each data set 3 years apart. 
 
-Our interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools. With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+Our interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools. With the test scores as the response, we hope to model how charter schools will perform compared to public schools using the other fields as predictors.
 
 ## Methods
 
