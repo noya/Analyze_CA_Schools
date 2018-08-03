@@ -386,6 +386,8 @@ str(data_2010)
 ```
 
 ```{r}
+# group 13
+set.seed(13)
 #
 # Randomly draw 600 samples from dataset
 # Split samples into train and test
@@ -542,11 +544,11 @@ pairs(subset(data_2013,select=c('API13', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
 pairs(subset(data_2013,select=c('API13', 'MEALS', 'P_MIGED', 'P_DI')))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 pairs(subset(data_2013,select=c('API13', 'CBMOB', 'DMOB', 'ACS_K3')))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 pairs(subset(data_2013,select=c('API13', 'ACS_46', 'ACS_CORE', 'NOT_HSG')))
 ```
 
@@ -566,11 +568,11 @@ pairs(subset(data_2013,select=c('API13', 'PEN_2', 'PEN_35', 'PEN_6')))
 pairs(subset(data_2013,select=c('API13', 'PEN_78', 'PEN_911', 'ENROLL')))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 pairs(subset(data_2013,select=c('API13', 'PAR_OPT', 'CW_CSTE', 'CWS_91')))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 pairs(subset(data_2013,select=c('API13', 'CW_CSTH', 'CW_CHSM', 'CW_SCI')))
 ```
 
@@ -667,10 +669,6 @@ shapiro.test(resid(model_opt2))
 car::vif(model_opt2)
 ```
 
-```{r}
-str(data_2010_trn)
-```
-
 
 ```{r}
 #################
@@ -698,7 +696,7 @@ str(data_2010_trn)
 #                data = data_2010_trn)
   
 #  mod_2007 = lm(API07  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = data_2007_trn )
-# 
+#   
 #   
 # # check assumptions
 # diagnostics(mod_2007)
@@ -718,8 +716,7 @@ str(data_2010_trn)
 #                data = data_2004_trn)
   
  mod_2010 = lm(API10  ~ PEN_2 +  PEN_35 +  poly(PCT_AS, 2) +  (PCT_HI)  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL + MEALS, data = data_2010_trn )
-# 
-#  mod_2010 = lm(API10  ~  PCT_AS +  (PCT_HI)  + PCT_WH     + P_GATE +    P_EL   + poly(AVG_ED, 3) +  ENROLL , data = data_2010_trn )
+
 
 # check assumptions
 diagnostics(mod_2010)
