@@ -9,6 +9,22 @@ output:
 urlcolor: cyan
 ---
 
+## Indroduction
+## Dataset Description
+
+The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+
+With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+
+## Background
+
+School performance as recorded by the CA Dept. of Education from 1999-2013 (https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp)
+
+## Interest
+
+Interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools.
+
+## Methods
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(foreign)
@@ -29,6 +45,9 @@ install.packages("foreign")
 ```{r}
 set.seed(42)
 data_2013 = read.dbf("data/api13gdb.dbf")
+data_2010 = read.dbf("data/api10gdb.dbf", as.is = TRUE)
+data_2007 = read.dbf("data/api07gdb.dbf", as.is = TRUE)
+data_2004 = read.dbf("data/api04gdb.dbf", as.is = TRUE)
 ```
 
 ```{r eval=FALSE,include=FALSE}

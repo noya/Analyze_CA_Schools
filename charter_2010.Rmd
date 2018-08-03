@@ -103,7 +103,7 @@ remove_common_columns = function(dframe) {
   # Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
 
   # Transform STYPE column by setting NA to 'O' to indicate other
-  data_2013$STYPE = as.factor(ifelse(is.na(data_2013$STYPE), "O", data_2013$STYPE))
+  dframe$STYPE = as.factor(ifelse(is.na(dframe$STYPE), "O", dframe$STYPE))
 
   # Remove the names because we have the school id in the first column
   dframe = remove_columns(dframe, c("SNAME", "DNAME", "CNAME"))
@@ -176,7 +176,7 @@ diagnostics = function(model, pcol = "grey", lcol = "dodgerblue", alpha = 0.05,
 
 ```{r}
 #############################
-# Clean up data set 2010
+# Data Cleaning for 2010
 #############################
 # remove comoonly removable columns
 schl2010 = remove_common_columns(schl2010)
@@ -191,20 +191,28 @@ schl2010 = subset(schl2010, subset = is.na(schl2010$sm10) & is.na(schl2010$sm09)
 # Remove rows with MEDIAN13 or MEDIAN12 = NA
 schl2010 = subset(schl2010, subset = !is.na(schl2010$MEDIAN10) | !is.na(schl2010$MEDIAN09))
 
-
 # Remove schl2010 rank that are I = Invalid, B = District, or C = Special Education schl2010
 #schl2010 = schl2010[!(schl2010$ST_RANK %in% c("I", "B", "C")), ]
 
 # Remove schl2010 similar rank that are I = Invalid, B = District, or C = Special Education schl2010
 #schl2010 = schl2010[!(schl2010$SIM_RANK %in% c("I", "B", "C", "O", "S")), ]
 
+# Iterate with any columns that have NAs: either transfrom the NA to something else, 
+# or remove the column, or remove the row.
+# Remove columns if they don't look like they're needed according to this dataset's record layout 
+# (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
 other_cols = show_columns_with_na(schl2010)
 schl2010 = remove_columns(schl2010, other_cols)
 schl2010 = na.omit(schl2010)
-nrow(schl2010)
+
+# convert columns to factor
+schl2010 = conv_factor(schl2010, fac_pred)
+
+# convert columns to numeric
+schl2010 = conv_numeric(schl2010, num_pred)
 
 #############################
-# Clean up data set 2013
+# Data Cleaning for 2013
 #############################
 # remove comoonly removable columns
 schl2013 = remove_common_columns(schl2013)
@@ -219,27 +227,30 @@ schl2013 = subset(schl2013, subset = is.na(schl2013$SM12) & is.na(schl2013$SM13)
 # Remove rows with MEDIAN13 or MEDIAN12 = NA
 schl2013 = subset(schl2013, subset = !is.na(schl2013$MEDIAN13) | !is.na(schl2013$MEDIAN12))
 
+# Iterate with any columns that have NAs: either transfrom the NA to something else, 
+# or remove the column, or remove the row.
+# Remove columns if they don't look like they're needed according to this dataset's record layout 
+# (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
 other_cols = show_columns_with_na(schl2013)
 schl2013 = remove_columns(schl2013, other_cols)
 schl2013 = na.omit(schl2013)
-nrow(schl2013)
-schl2013 = na.omit(schl2013)
+
+# convert columns to factor
+schl2013 = conv_factor(schl2013, fac_pred)
+
+# convert columns to numeric
+schl2013 = conv_numeric(schl2013, num_pred)
 ```
 
 
 ```{r}
+seed = 1
+set.seed(seed)
+##########################################
+# Randomly select samples that we want to model
+#########################################
 
-#####################
-# Convert columns to factors and numerics for 2010
-####################
-# convert columns to factor
-schl2010 = conv_factor(schl2010, fac_pred)
-
-# convert columns to numeric
-schl2010 = conv_numeric(schl2010, num_pred)
-
-# Randomly select 600 observations
-#nrow(schl2010)
+# Randomly select 600 observations from 2010 data set
 ridx = sample(nrow(schl2010), 600)
 schl2010 = schl2010[ridx, ]
 
@@ -249,17 +260,7 @@ trn_idx = sample(nrow(schl2010), n/2)
 schl2010_trn = schl2010[trn_idx, ]
 schl2010_tst = schl2010[-trn_idx, ]
 
-
-#####################
-# Convert columns to factors and numerics for 2013
-####################
-# convert columns to factor
-schl2013 = conv_factor(schl2013, fac_pred)
-
-# convert columns to numeric
-schl2013 = conv_numeric(schl2013, num_pred)
-
-# Randomly select 600 observations
+# Randomly select 600 observations from 2010 data set
 ridx = sample(nrow(schl2013), 600)
 schl2013 = schl2013[ridx, ]
 
@@ -270,7 +271,61 @@ schl2013_trn = schl2013[trn_idx, ]
 schl2013_tst = schl2013[-trn_idx, ]
 ```
 
+```{r}
+# we leave out STYPE because it can be represented by student enrollment per grade (PEN_2..)
+# we leaving out NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they can be represented by AVG_ED
+# We leave out TESTEd because it's highly related with ENROLL
+schl2010_big_mod = lm(API10 ~ #.,
+                (PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 +
+                   CDS +
+                   CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
+                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_MR + PCT_WH + 
+                MEALS +  # MEALS is highly correlated with AVG_ED
+                  P_GATE + P_MIGED + P_RFEP + P_DI +  P_EL +
+                CBMOB + DMOB + 
+                PCT_RESP + 
+                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
+                ENROLL # #TESTED +#highly correlated with ENROLL
+                   #+ YR_RND #+ SCI depends on API
+                ) ,
+              data = schl2010_trn)
 
+schl_aic = step(schl2010_big_mod, direction = "backward", k = log(n), trace = FALSE, maxit = 100)
+
+# check assumptions
+bptest(schl_aic)
+shapiro.test(resid(schl_aic))
+
+# check how the model is fitting
+summary(schl_aic)
+vif(schl_aic) 
+
+
+schl2013_big_mod = lm(API13 ~ #.,
+                (PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 +
+                   CDS +
+                   CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
+                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_MR + PCT_WH + 
+                MEALS +  # MEALS is highly correlated with AVG_ED
+                  P_GATE + P_MIGED + P_RFEP + P_DI +  P_EL +
+                CBMOB + DMOB + 
+                PCT_RESP + 
+                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
+                ENROLL # #TESTED +#highly correlated with ENROLL
+                   #+ YR_RND #+ SCI depends on API
+                ) ,
+              data = schl2013_trn)
+
+schl13_aic = step(schl2013_big_mod, direction = "backward", k = log(n), trace = FALSE, maxit = 100)
+
+# check assumptions
+bptest(schl13_aic)
+shapiro.test(resid(schl13_aic))
+
+# check how the model is fitting
+summary(schl13_aic)
+vif(schl13_aic) 
+```
 
 
 
@@ -278,11 +333,12 @@ schl2013_tst = schl2013[-trn_idx, ]
 #################
 # 2010
 #################
-# schl2010_fit = lm(API10  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
+# schl2010_fit = lm(API10  ~ PEN_2  +  PEN_35 + PEN_6   + PEN_78  + poly(PCT_AA, 2) + poly(PCT_AI, 1) + poly(PCT_AS, 2) + poly(PCT_WH, 2) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
 #                data = schl2010_trn)
-
-schl2010_fit = lm(API10  ~  PEN_2  +  PEN_35   +  PEN_6   + PEN_78  +  PCT_AA  +  P_RFEP  +    P_DI   +   P_EL    + CBMOB + AVG_ED +  ENROLL, data = schl2010_trn)
   
+ schl2010_fit = lm(API10  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = schl2010_trn )
+
+ 
   
 # check assumptions
 diagnostics(schl2010_fit)
@@ -298,10 +354,12 @@ plot(pred ~ schl2010_tst$API10, col = "dodgerblue")
 #################
 # 2013
 #################
-# schl2013_fit = lm(API13  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 1) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + MEALS ,
+# schl2013_fit = lm(API13  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 2) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + MEALS ,
 #                data = schl2013_trn)
-schl2013_fit = lm(API13  ~  PEN_2  +  PEN_35   +  PEN_6   + PEN_78  +  PCT_AA  +  P_RFEP  +    P_DI   +   P_EL    + CBMOB + AVG_ED +  ENROLL, data = schl2013_trn)
+ # schl2013_fit = lm(API13  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + (PCT_WH)     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = schl2013_trn )
 
+schl2013_fit = lm(API13 ~    PEN_2 +  PEN_35 +   PEN_6  + PEN_78 +  poly(PCT_AS, 2) +  poly(PCT_FI, 1) +   PCT_HI +   poly(PCT_WH, 1)  +   P_EL  +  log(CBMOB) + poly(AVG_ED, 3), data =  schl2013_trn)
+  
 # check assumptions
 diagnostics(schl2013_fit)
 
@@ -315,44 +373,10 @@ plot(pred ~ schl2013_tst$API13, col = "dodgerblue")
 ```
 
 ```{r}
-# we leave out STYPE because it can be represented by student enrollment per grade (PEN_2..)
-# we leaving out NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they can be represented by AVG_ED
-# We leave out TESTEd because it's highly related with ENROLL
-schl_big_mod = lm(API10 ~ #.,
-                (PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 +
-                   CDS +
-                   CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
-                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_MR + PCT_WH + 
-                MEALS +  # MEALS is highly correlated with AVG_ED
-                  P_GATE + P_MIGED + P_RFEP + P_DI +  P_EL +
-                CBMOB + DMOB + 
-                PCT_RESP + 
-                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
-                ENROLL # #TESTED +#highly correlated with ENROLL
-                   #+ YR_RND #+ SCI depends on API
-                ) ,
-              data = schl2010_trn)
 
-nrow(schl2010_trn)
-ncol(schl2010_trn)
-# Check assumptions
-bptest(schl_big_mod)
-shapiro.test(resid(schl_big_mod))
-
-# Check how well the model is fitting
-summary(schl_big_mod)
-vif(schl_big_mod)
-
-schl_aic = step(schl_big_mod, direction = "backward", k = log(n), trace = FALSE, maxit = 100)
-
-# check assumptions
-bptest(schl_aic)
-shapiro.test(resid(schl_aic))
-
-# check how the model is fitting
-summary(schl_aic)
-vif(schl_aic) 
 ```
+
+
 ### Methodology
 
 - Split data into charter and non-charter.
