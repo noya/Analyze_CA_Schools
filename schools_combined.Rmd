@@ -257,7 +257,7 @@ We find that the best lambda in this case 2.85.
 lambda = 2.85
 mod_cox = lm((API13 ^ lambda - 1)/lambda ~CHARTER + PCT_AA + PCT_AI + PCT_AS + PCT_HI + PCT_PI + 
     P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + CBMOB + NOT_HSG + HSG + COL_GRAD + GRAD_SCH + EMER, data = data_2013)
-summary(mod_cox)
+#summary(mod_cox)
 diagnostics(mod_cox)
 ```
 
@@ -295,6 +295,7 @@ abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
 
 ```
+
 Our model based on data from 2013 does a fairly good job at predicting API scores, however, on the low end of API scores, there is significant amount of variance.
 
 #Conclusions
