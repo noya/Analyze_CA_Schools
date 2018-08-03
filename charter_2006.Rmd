@@ -191,6 +191,7 @@ summary(mod_new)
 diagnostics(mod_new)
 ```
 
+#Weighted least squares regression
 ```{r}
 # Ordinary least-squares with no weights
 model1 = lm( API06 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + 
