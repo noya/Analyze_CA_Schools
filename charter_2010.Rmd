@@ -387,16 +387,15 @@ data_2013 = conv_factor(data_2013, fact_columns)
 # convert columns to numeric
 data_2013 = conv_numeric(data_2013, num_columns)
 nrow(data_2013)
-`````
+```
 
-We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000  valid data, sample size of 350 gives us about 95% confidence of accurately representing the model.
+We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid data, sample size of 350 gives us about 95% confidence with 5% of error of accurately representing the model.
 
 ```{r}
 grp_num = 13
 set.seed(grp_num)
 sample_size = 700
 
-#
 # Randomly draw sample_size samples from dataset
 # Split samples evenly into train and test
 #
@@ -526,7 +525,9 @@ pairs(subset(data_2013,select=c('API13', 'MEALS', 'AVG_ED')))
 #################
 # 2010
 #################
-mod_2010 = lm(API10  ~ PEN_2 +  PEN_35 +  poly(PCT_AS, 2) +  PCT_AA  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP + P_MIGED + poly(AVG_ED, 3) +  ENROLL, data = data_2010_trn )
+# mod_2010 = lm(API10  ~ PEN_2 +  PEN_35 +  poly(PCT_AS, 2) +  PCT_AA  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP + P_MIGED + poly(AVG_ED, 3) +  ENROLL, data = data_2010_trn )
+
+mod_2010 = lm(API10  ~ PEN_35 +  poly(PCT_AS, 2) +  PCT_AA  + PCT_WH + P_GATE +    P_EL  +   DMOB + PCT_RESP + P_MIGED + poly(AVG_ED, 3)  + BOTH, data = data_2010_trn )
 
 #################
 # 2013
@@ -554,10 +555,22 @@ vif(mod_2010)
 ```{r}
 
 # see how well we predict
-pred = predict(mod_2010, newdata = data_2010_tst)
-plot(pred ~ data_2010_tst$API10, col = "dodgerblue", xlab = "Actual 2010 API score", ylab = "Predicted 2010 API score")
+pred_2010 = predict(mod_2010, newdata = data_2010_tst)
+plot(pred_2010 ~ data_2010_tst$API10, col = "dodgerblue", xlab = "Actual 2010 API score", ylab = "Predicted 2010 API score")
 abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
+# pred_2013 = predict(mod_2010, newdata = data_2013_tst)
+# plot(pred_2013 ~ data_2013_tst$API13, col = "dodgerblue", xlab = "Actual 2013 API score", ylab = "Predicted 2013 API score")
+# #abline(a = 0, b = 1, col = "darkorange", lwd = 3)
+
+#data_2007_tst$API06
+pred_2007 = predict(mod_2010, newdata = data_2007_tst)
+plot(pred_2007 ~ data_2007_tst$API06, col = "dodgerblue", xlab = "Actual 2007 API score", ylab = "Predicted 2007 API score")
+abline(a = 0, b = 1, col = "darkorange", lwd = 3)
+
+# pred_2004 = predict(mod_2010, newdata = data_2004_tst)
+# plot(pred_2004 ~ data_2004_tst$API04, col = "dodgerblue", xlab = "Actual 2004 API score", ylab = "Predicted 2004 API score")
+# abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 ```
 
 
@@ -585,6 +598,8 @@ cor(data_2010_trn[, c("PCT_AS", "MEALS")])
 ```
 
 Again this model is not the only model that will fit. Since ethnicity have a collinearity issue (since all percentages add up to 100%), the model will pick a particular ethnicity depending on the data set. So these predictors are not obsolete. 
+
+We see that this model also predicts the student's test score somewhat well in teh 2007 data set.
 
 Confusingly, it seems that the main factor affecting the student's test score are the family's background in education and income level. There doesn't seem much of an impact from school here. We see that there are no effects on whether the school is a charter school or not. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results simply are correlation and not causation.
 
