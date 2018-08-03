@@ -1,6 +1,6 @@
 ---
 title: "Charter 2010"
-author: "STAT 420, Summer 2018, bching3, cindyst2, rjs8, trapido2"
+author: "STAT 420, Summer 2018, Group 13: bching3, cindyst2, rjs8, trapido2"
 date: '07/30/2018'
 output:
   html_document: 
@@ -11,17 +11,17 @@ urlcolor: cyan
 
 ## Introduction
 
-This study is to explore the different factors that affects a student's test score. We want to come up with a model that helps us explain the student's test score with these factors, and use the model to predict the student's performance. We want to see how this model changes over 9 years, each data set 3 years apart. 
+This study is to explore the different factors that could affects a student's test score. We want to come up with a model that helps us identify factors that correlate to a student's performance. We want to use the same model and see if these correlations carry through the years. 
 
-Specifically, the data set that we will use comes from https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. We will use the "2004 Growth API", "2007 Growth API", "2010 Growth API", and the "2013 Growth API".
+Specifically, the data set that we will use comes from https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. We will use the "2010 Growth API" data set to train a model. We will use the same model to predict the student's performance in the "2007 Growth API" data set.
 
-The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+The dataset tracks the school's name, district, type (charter or not), student demographics, ranking in the state, class sizes, average parental education levels, and teacher credentials.
 
 Our interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools. With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
 
 ## Methods
 
-Since we are observing 2004, 2007, 2010, and 2013, we will use the API scores from these respective years as our response. We will fit model for each year's data set. 
+Since we are observing 2007 and 2010, we will use the API scores from these respective years as our response. We will fit model for each year's data set. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -42,14 +42,9 @@ install.packages("foreign")
 
 ```{r}
 set.seed(42)
-data_2013 = read.dbf("data/api13gdb.dbf")
 data_2010 = read.dbf("data/api10gdb.dbf", as.is = TRUE)
 data_2007 = read.dbf("data/api07gdb.dbf", as.is = TRUE)
-data_2004 = read.dbf("data/api04gdb.dbf", as.is = TRUE)
-```
-
-```{r eval=FALSE,include=FALSE}
-View(data_2013)
+str(data_2010, attr = FALSE)
 ```
 
 We start out by looking at the data and removing any rows that have missing data since we would be unable to provide estimates for their values.
@@ -233,37 +228,6 @@ num_columns = c("API09","API10", "API13", "API07", "API04",
 
 ```
 
-```{r eval=FALSE, include=FALSE}
-#############################
-# Data Cleaning for 2004
-#############################
-# remove commonly removable columns
-data_2004 = remove_common_columns(data_2004)
-
-# Remove columns unique to the dataset
-# _api is related to API which we are trying to measure
-data_2004 = remove_columns_like(data_2004, c("_API04", "_API03"))
-
-# Remove rows with MEDIAN13 or MEDIAN12 = NA
-#data_2004 = subset(data_2004, subset = !is.na(data_2004$MEDIAN04) | !is.na(data_2004$MEDIAN03))
-
-# Iterate with any columns that have NAs: either transform the NA to something else, 
-# or remove the column, or remove the row.
-# Remove columns if they don"t look like they're needed according to this dataset's record layout
-# (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
-other_cols = show_columns_with_na(data_2004)
-data_2004 = remove_columns(data_2004, other_cols)
-data_2004 = na.omit(data_2004)
-
-# convert columns to factor
-data_2004 = conv_factor(data_2004, fact_columns)
-
-# convert columns to numeric
-data_2004 = conv_numeric(data_2004, num_columns)
-nrow(data_2004)
-ncol(data_2004)
-
-```
 
 
 ```{r}
@@ -329,7 +293,10 @@ data_2010 = subset(data_2010, subset = is.na(data_2010$sm10) & is.na(data_2010$s
 data_2010 = subset(data_2010, subset = !is.na(data_2010$MEDIAN10) | !is.na(data_2010$MEDIAN09))
 
 # Remove all fields with component test scores because this is what we're trying to find relationships for.
-data_2010 = remove_columns(data_2010, c("API09", "TARGET", "GROWTH", "COMP_IMP", "MEDIAN10", "MEDIAN09"))
+data_2010 = remove_columns_like(data_2010, c("VCST_", "PCST_", "VCHS_", "PCHS", "CW_", "CWM2_", "CWS2_", "VCSTM2_", "PCSTM2_", "CWS_", "VCSTS2_", "PCSTS2_", "TOT_"))
+data_2010 = remove_columns(data_2010, c("API09", "TARGET", "GROWTH", "COMP_IMP", "MEDIAN10", "MEDIAN09", "SCH_WIDE"))
+
+data_2010 = remove_columns_like(data_2010, c("GRAD", "HSG", "SOME_COL"))
 
 # Remove columns with too many NA
 other_cols = show_columns_with_na(data_2010)
@@ -339,7 +306,6 @@ data_2010 = na.omit(data_2010)
 unique(data_2010$RTYPE) # yields only one factor in dataset, so remove the column
 data_2010 = remove_columns(data_2010, c("RTYPE"))
 
-
 # convert columns to factor
 data_2010 = conv_factor(data_2010, fact_columns)
 
@@ -347,70 +313,14 @@ data_2010 = conv_factor(data_2010, fact_columns)
 data_2010 = conv_numeric(data_2010, num_columns)
 
 nrow(data_2010)
-
-#############################
-# Data Cleaning for 2013
-#############################
-# remove commonly removable columns
-data_2013 = remove_common_columns(data_2013)
-
-data_2013$CHARTER = ifelse(is.na(data_2013$CHARTER), "NC", data_2013$CHARTER)
-
-# Remove columns unique to the dataset
-# _api is related to API which we are trying to measure
-data_2013 = remove_columns_like(data_2013, c("_API12", "_API13"))
-
-# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
-data_2013 = subset(data_2013, subset = is.na(data_2013$SM12) & is.na(data_2013$SM13), select = !(colnames(data_2013) %in% c('SM12','SM13')))
-
-# Remove rows with MEDIAN13 or MEDIAN12 = NA
-data_2013 = subset(data_2013, subset = !is.na(data_2013$MEDIAN13) | !is.na(data_2013$MEDIAN12))
-
-# Iterate with any columns that have NAs: either transform the NA to something else, 
-# or remove the column, or remove the row.
-# Remove columns if they don't look like they're needed according to this dataset's record layout 
-# (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
-other_cols = show_columns_with_na(data_2013)
-data_2013 = remove_columns(data_2013, other_cols)
-data_2013 = na.omit(data_2013)
-
-# remove school identifier
-data_2013 = remove_columns(data_2013, c("CDS"))
-
-# this seems to have more than one?
-unique(data_2013$RTYPE) # yields only one factor in dataset, so remove the column
-#data_2013 = remove_columns(data_2013, c("RTYPE"))
-
-# convert columns to factor
-data_2013 = conv_factor(data_2013, fact_columns)
-
-# convert columns to numeric
-data_2013 = conv_numeric(data_2013, num_columns)
-nrow(data_2013)
 ```
 
-We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid data, sample size of 350 gives us about 95% confidence with 5% of error of accurately representing the model.
+We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid data, sample size of 350 gives us about 95% confidence with 5% of error to accurately representing the model.
 
 ```{r}
 grp_num = 13
 set.seed(grp_num)
 sample_size = 700
-
-# Randomly draw sample_size samples from dataset
-# Split samples evenly into train and test
-#
-
-# 2004
-# Split the dataset into training and test data set
-# Randomly select 600 observations from 2010 data set
-ridx = sample(nrow(data_2004), sample_size)
-data_2004 = data_2004[ridx, ]
-
-# split dataframe into training and test
-(n = nrow(data_2004))
-trn_idx = sample(nrow(data_2004), n/2)
-data_2004_trn = data_2004[trn_idx, ]
-data_2004_tst = data_2004[-trn_idx, ]
 
 # 2007
 # Split the dataset into training and test data set
@@ -435,19 +345,8 @@ data_2010 = data_2010[ridx, ]
 trn_idx = sample(nrow(data_2010), n/2)
 data_2010_trn = data_2010[trn_idx, ]
 data_2010_tst = data_2010[-trn_idx, ]
-
-# 2013
-# Split the dataset into training and test data set
-# Randomly select 600 observations from 2010 data set
-ridx = sample(nrow(data_2013), sample_size)
-data_2013 = data_2013[ridx, ]
-
-# split dataframe into training and test
-(n = nrow(data_2013))
-trn_idx = sample(nrow(data_2013), n/2)
-data_2013_trn = data_2013[trn_idx, ]
-data_2013_tst = data_2013[-trn_idx, ]
 ```
+
 
 We try to fit all the predictors and see if any of the predictors seems promising:
 
@@ -467,74 +366,30 @@ Even though this model has some high collinearity issue, it looks pretty promisi
 
 
 ```{r, fig.width=30, fig.height=30}
-cor(subset(data_2013,select=c('API13', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
+cor(subset(data_2010_trn,select=c('API10', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
 ```
 
 Since the entire ethnicity adds up to 100%, the ethnic percentage have a somewhat high collinearity. 
 
 ```{r}
-pairs(subset(data_2013,select=c('API13', 'P_MIGED', 'P_DI')))
+pairs(subset(data_2010_trn,select=c('API10', 'P_MIGED', 'P_DI')))
 ```
 
 
 ```{r}
-pairs(subset(data_2013,select=c('API13', 'MEALS', 'AVG_ED')))
+pairs(subset(data_2010_trn,select=c('API10', 'MEALS', 'AVG_ED')))
 ```
 
 `MEALS` corresponds to student's eligibility for free or reduced price meal program. Perhaps it is not surprising to see that `MEALS` are highly correlated with the parent's education level `AVG_ED`. 
 
 ```{r}
-#################
-# 2004
-#################
-#   
-# mod_2004 = lm(API04  ~ PCT_AS +  log(PCT_HI)  + PCT_WH   +   DMOB + PCT_RESP +  (AVG_ED) +  ENROLL , data = data_2004_trn )
-# 
-# 
-# # check assumptions
-# diagnostics(mod_2004)
-# 
-# # check how the model is fitting
-# summary(mod_2004)
-# vif(mod_2004) 
-# calc_loocv_rmse(mod_2004)
-# 
-# pred = predict(mod_2004, newdata = data_2004_tst)
-# plot(pred ~ mod_2004$API04, col = "dodgerblue")
-
-#################
-# 2007
-#################
-# schl2010_fit = lm(API10  ~ PEN_2  +  PEN_35 + PEN_6   + PEN_78  + poly(PCT_AA, 2) + poly(PCT_AI, 1) + poly(PCT_AS, 2) + poly(PCT_WH, 2) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
-#                data = data_2010_trn)
-  
-#  mod_2007 = lm(API07  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = data_2007_trn )
-#   
-#   
-# # check assumptions
-# diagnostics(mod_2007)
-# 
-# # check how the model is fitting
-# summary(mod_2007)
-# vif(mod_2007) 
-# calc_loocv_rmse(mod_2007)
-# 
-# pred = predict(mod_2007, newdata = data_2007_tst)
-# plot(pred ~ data_2007_tst$API07, col = "dodgerblue")
 
 #################
 # 2010
 #################
-# mod_2010 = lm(API10  ~ PEN_2 +  PEN_35 +  poly(PCT_AS, 2) +  PCT_AA  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP + P_MIGED + poly(AVG_ED, 3) +  ENROLL, data = data_2010_trn )
 
-mod_2010 = lm(API10  ~ PEN_35 +  poly(PCT_AS, 2) +  PCT_AA  + PCT_WH + P_GATE +    P_EL  +   DMOB + PCT_RESP + P_MIGED + poly(AVG_ED, 3)  + BOTH, data = data_2010_trn )
+mod_2010 = lm(API10  ~  PEN_35 +  poly(PCT_AS, 2) +  poly(PCT_AA, 2)  + PCT_WH + poly(P_GATE, 2) + log(P_DI) + DMOB + PCT_RESP + poly(AVG_ED, 3):MEALS  , data = data_2010_trn )
 
-#################
-# 2013
-#################
-
-mod_2013 = lm(API13 ~    PEN_2 +  PEN_35 +   PEN_6  + PEN_78 +  poly(PCT_AS, 2) +  poly(PCT_FI, 1) +   PCT_HI +   poly(PCT_WH, 1)  +   P_EL  +  log(CBMOB) + poly(AVG_ED, 4), data =  data_2013_trn)
-  
 ```
 
 ## Results
@@ -547,30 +402,20 @@ diagnostics(mod_2010)
 summary(mod_2010)
 vif(mod_2010)
 
-# seeing if we are overfitting
-#calc_loocv_rmse(mod_2010)
-
 ```
 
 ```{r}
-
-# see how well we predict
+par(mfrow = c(1, 2))
+# see how well we predict on 2010 test set
 pred_2010 = predict(mod_2010, newdata = data_2010_tst)
 plot(pred_2010 ~ data_2010_tst$API10, col = "dodgerblue", xlab = "Actual 2010 API score", ylab = "Predicted 2010 API score")
 abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
-# pred_2013 = predict(mod_2010, newdata = data_2013_tst)
-# plot(pred_2013 ~ data_2013_tst$API13, col = "dodgerblue", xlab = "Actual 2013 API score", ylab = "Predicted 2013 API score")
-# #abline(a = 0, b = 1, col = "darkorange", lwd = 3)
-
-#data_2007_tst$API06
+# see how well we predict on 2007 test set
 pred_2007 = predict(mod_2010, newdata = data_2007_tst)
 plot(pred_2007 ~ data_2007_tst$API06, col = "dodgerblue", xlab = "Actual 2007 API score", ylab = "Predicted 2007 API score")
 abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
-# pred_2004 = predict(mod_2010, newdata = data_2004_tst)
-# plot(pred_2004 ~ data_2004_tst$API04, col = "dodgerblue", xlab = "Actual 2004 API score", ylab = "Predicted 2004 API score")
-# abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 ```
 
 
@@ -583,13 +428,16 @@ Looking at the `GVIF^(1/(2*Df))` column, we also see that none of the predictors
 In this particular model, we see that the following predictors being significant  with a significance level of 0.05:
 
 - Parent's average education (AVG_ED)
+- Percentage of students that are eligible in the free or reduced price meal program (MEALS)
 - Ethnicity (PCT_AS, PCT_AA, PCT_WH)
 - Percentage of participants in gifted and talented education programs (P_GATE)
 - Percentage of enrollment for 3~5 grades (PEN_35)
 - Percent of Student Answer Documents with Parent Education Level Information(PCT_RESP)
-- Percentage of continuously enrolled since that date (DMOB)
+- Percent of Students with Disabilities (P_DI)
 
-Amongst the predictors, the coefficient for parent's education level is the highest, with an estimate of `r coef(mod_2010)['poly(AVG_ED, 3)1']`, then  followed by the whether the student is Asian or not, with an estimation of `r coef(mod_2010)['poly(PCT_AS, 2)1']`. Please note that those coefficients are related to the first order term, higher order terms actually has negative coefficients. 
+Amongst the predictors, the coefficients for any interaction term between parent's education level (AVG_ED) and family income (MEALS) are all postive. For the other polynomial predictors, first order term for percentage of asians (P_AS) have a high positive correlation, while the second order term it is negative. Conversely first order term for percentage of african americans (P_AA) have negative correlations while the second order term is positive. Lastly percentage of white is significant, however the effect seems minual (estimation is only `r coef(mod_2010)['PCT_WH']`)
+
+We see that the percentage of students in gifted program (P_GATE) also has a positive relationship for the first order term (`r coef(mod_2010)['poly(P_GATE, 2)1']`) while P_DI has a slight negative correlation (`r coef(mod_2010)['log(P_DI)'] `).
 
 We can probably hypothesize that parent's with higher education learn how to teach the kids more, or, since parent's education are highly tied with family economic income, that in higher income families parents' have more time to spend with their kids, and hence ensuring the kids success in school. Lastly we see that there is also high correlation of student's ethnicity. This may be due to the Asian's families seem to have a higher income. We can see that there's negative correlation between Asian family and being economically disadvantaged. 
 
@@ -599,9 +447,9 @@ cor(data_2010_trn[, c("PCT_AS", "MEALS")])
 
 Again this model is not the only model that will fit. Since ethnicity have a collinearity issue (since all percentages add up to 100%), the model will pick a particular ethnicity depending on the data set. So these predictors are not obsolete. 
 
-We see that this model also predicts the student's test score somewhat well in teh 2007 data set.
+We see that this model also predicts the student's test score somewhat well in the 2007 data set.
 
-Confusingly, it seems that the main factor affecting the student's test score are the family's background in education and income level. There doesn't seem much of an impact from school here. We see that there are no effects on whether the school is a charter school or not. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results simply are correlation and not causation.
+In conclusion, it seems that the main factor affecting the student's test score are the family's background in education and income level. There doesn't seem much of an impact from school here. We see that there are no effects on whether the school is a charter school or not. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results simply are correlation and not causation.
 
 
 ## Appendix
