@@ -1,0 +1,318 @@
+---
+title: "Study of School Academic Performance"
+author: "cindyst2, trapido2, bching3, rjs8"
+date: '07/30/2018'
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+install.packages("foreign")
+```
+
+```{r}
+library(foreign)
+library(lmtest)
+library(faraway)
+library(MASS)
+```
+
+#Introduction
+
+## Background
+As part of California's accountability program, the state Deptarment of Education measures student academic performance and its growth. To achieve this goal, from 1999-2013, the California Department of Education annually calculated the Academic Performance Index (API) for all public schools. These data sets are publicly available at the California Department of Education web site, https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp.
+
+## Dataset Description
+
+In addition to API scores, the dataset contains the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+
+##Interest
+
+We would like to find out which factors predict the academic performance of a school. We are particularly interested to determine whether the fact that the school is a charter school helps the school achieve higher API. Interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools.
+
+#Methodology
+
+We will use API scores as our response. Since we are observing 2004, 2007, 2010, and 2013, we will use the API scores from these respective years as our response. We will build a model base on data from one year and see how well it predicts API scores from other years. 
+
+# Data Cleaning
+```{r}
+schl2004 = read.dbf("data/api04gdb.dbf", as.is = TRUE)
+schl2007 = read.dbf("data/api07gdb.dbf", as.is = TRUE)
+schl2010 = read.dbf("data/api10gdb.dbf", as.is = TRUE)
+schl2013 = read.dbf("data/api13gdb.dbf", as.is = TRUE)
+```
+
+We also create a few helper functions:
+```{r}
+#Helper function to remove columns by name (also works on part of column name)
+remove_columns = function(dframe, columns_to_remove){
+  dframe[-grep(paste(columns_to_remove, collapse = "|"), names(dframe), ignore.case = TRUE)]
+}
+```
+```{r}
+#Helper function to run diagnostics
+diagnostics = function(model, pcol = "grey", lcol = "dodgerblue", alpha = 0.05, 
+                       plotit = TRUE, testit = TRUE) {
+  if (plotit == TRUE) {
+    
+    # side-by-side plots (one row, two columns)
+    par(mfrow = c(1, 2))
+    
+    # fitted versus residuals
+    plot(fitted(model), resid(model), 
+         col = pcol, pch = 20, cex = 1.5, 
+         xlab = "Fitted", ylab = "Residuals", 
+         main = "Fitted versus Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    grid()
+    
+    # qq-plot
+    qqnorm(resid(model), col = pcol, pch = 20, cex = 1.5)
+    qqline(resid(model), col = lcol, lwd = 2)
+    grid()
+  }
+  
+  if (testit == TRUE) {
+    p_val_bp = bptest(model)$p.value
+    decision_bp = ifelse(p_val_bp < alpha, "Fail BP test", "Pass BP test")
+    residuals = resid(model)
+    if(length(residuals) > 4500){
+      sample_idx = sample(length(residuals), 4500)
+      residuals = residuals[sample_idx]
+    }
+
+    p_val_shapiro = shapiro.test(residuals)$p.value
+    decision_shapiro = ifelse(p_val_shapiro < alpha, "Fail Shapiro-Wilk test", "Pass Shapiro-Wilk test")
+    list(p_val_shapiro = p_val_shapiro, decision_shapiro = decision_shapiro, p_val_bp = p_val_bp, decision_bp = decision_bp)
+  }
+}    
+```
+
+```{r}
+create_subset = function(df, year){
+  cols_to_keep = c(paste0("API",year),"CHARTER", "SIZE", "RTYPE", "PCT_AA","PCT_AI","PCT_AS","PCT_FI","PCT_HI","PCT_PI","PCT_WH","MEALS","P_GATE","P_MIGED","P_EL","P_RFEP","P_DI","YR_RND","CBMOB","DMOB","ACS_K3","ACS_46","ACS_CORE","NOT_HSG","HSG","SOME_COL","COL_GRAD", "GRAD_SCH","AVG_ED","FULL","EMER")
+  df = subset(df, select = c(cols_to_keep))
+}
+
+```
+
+```{r}
+cleanup = function(df){
+  # Remove schools with SIZE = S or T which indicate non-valid API scores
+  
+  df = subset(df, subset = !(df$SIZE %in% c("S","T")), select =!(colnames(df) %in% c('SIZE')))
+
+  #We are only interested in looking at data at the school level, so removing rows related to district and   state data
+  df= subset(df, subset = (df$RTYPE == "S"), select =!(colnames(df) %in% c('RTYPE')))
+
+  # Remove rows with YR_RND = Yes because they have mostly NA columns
+  df = subset(df, subset = (df$YR_RND != 'Yes'), select =!(colnames(df) %in% c('YR_RND')))
+
+  #Remove rows with invalid data for parent education ("0" is most likely missing data)
+  df = subset(df, subset = AVG_ED != 0)
+
+
+}
+```
+```{r}
+
+convert_to_numeric = function(dframe, columns_to_numeric) {
+  for(col in columns_to_numeric) {
+    if(col %in% colnames(dframe)) {
+      dframe[, col] = as.numeric(dframe[, col])
+    }
+  }
+  dframe
+}
+
+```
+
+
+The dataset contains a lot of fields related to the calculation of API (target API, growth API) and its components (various subject tests), and also school ranks. These variables are highly correlated with our response variable, so we will remove them. We will also remove fields containing school, district and county names, school type, schoold code, and percent of enrollments.
+
+```{r}
+data_2004 = subset(schl2004, select = c("API04","RTYPE","PCT_AA","PCT_AI","PCT_AS","PCT_FI","PCT_HI","PCT_PI","PCT_WH","MEALS","CBMOB","DMOB","ACS_K3","ACS_46","ACS_CORE","NOT_HSG","HSG","SOME_COL","COL_GRAD", "GRAD_SCH","AVG_ED","FULL","EMER", "YR_RND"))
+data_2007 = create_subset(schl2007, "07")
+data_2010 = create_subset(schl2010, "10")
+data_2013 = create_subset(schl2013, "13")
+
+
+```
+
+```{r}
+#Removing observations that have missing API scores
+data_2004 = data_2004[complete.cases(data_2004$API04),]
+dim(data_2004)
+data_2007 = data_2007[complete.cases(data_2007$API07),]
+data_2010 = data_2010[complete.cases(data_2010$API10),]
+data_2013 = data_2013[complete.cases(data_2013$API13),]
+
+data_2004 = subset(data_2004, subset = (data_2004$YR_RND != 'Yes'), select =!(colnames(data_2004) %in% c('YR_RND')))
+
+#Remove rows with invalid data for parent education ("0" is most likely missing data)
+data_2004 = subset(data_2004, subset = AVG_ED != 0)
+data_2007 = cleanup(data_2007)
+data_2010 = cleanup(data_2010)
+data_2013 = cleanup(data_2013)
+
+```
+
+
+We convert CHARTER into factor. Additionally, we change factor levels for "CHARTER" variable: we code direct funded and charter ("D" and "C" in the original dataset) as "Y", and non-charter ("N/A" in the original dataset) as "N". 
+```{r}
+
+data_2007$CHARTER = as.factor(ifelse(is.na(data_2007$CHARTER), "N", "Y"))
+data_2010$CHARTER = as.factor(ifelse(is.na(data_2010$CHARTER), "N", "Y"))
+data_2013$CHARTER = as.factor(ifelse(is.na(data_2013$CHARTER), "N", "Y"))
+```
+
+The rest of the variables are numeric:
+
+```{r}
+common_cols = c("PCT_AA","PCT_AI","PCT_AS","PCT_FI","PCT_HI","PCT_PI","PCT_WH","MEALS","CBMOB","DMOB","ACS_K3","ACS_46","ACS_CORE","NOT_HSG","HSG","SOME_COL","COL_GRAD", "GRAD_SCH","AVG_ED","FULL","EMER")
+all_cols = c(common_cols, "P_GATE","P_MIGED","P_EL","P_RFEP","P_DI")
+data_2004 = convert_to_numeric(data_2004, c("API04", common_cols))
+data_2007 = convert_to_numeric(data_2007, c("API07", all_cols))
+data_2010 = convert_to_numeric(data_2010, c("API10", all_cols))
+data_2013 = convert_to_numeric(data_2013, c("API13", all_cols))
+
+```
+```{r}
+str(data_2013)
+dim(data_2004)
+dim(data_2007)
+dim(data_2010)
+dim(data_2013)
+```
+
+We will check the percentage of missing values in each dataset:
+
+```{r}
+sapply(data_2004, function(x) mean (is.na(x)))
+sapply(data_2007, function(x) mean (is.na(x)))
+sapply(data_2010, function(x) mean (is.na(x)))
+sapply(data_2013, function(x) mean (is.na(x)))
+```
+
+Average class size fields (ACS_K3, ACS_46, ACS_CORE) have a large percent of missing values, so we will have to remove them. We also know that average education variable is correlated with the other parent education variables, so we will not include it.
+
+```{r}
+data_2007 = remove_columns(data_2007, c('ACS_', 'AVG_ED'))
+data_2010 = remove_columns(data_2010, c('ACS_', 'AVG_ED', 'FULL', 'EMER')) #Also removing full and emergency credentials, since they have a lot of missing data
+data_2013 = remove_columns(data_2013, c('ACS_', 'AVG_ED'))
+
+```
+
+
+#Building a model
+
+We will use backward AIC selection:
+```{r}
+mod_full = lm(API13 ~ ., data = data_2013)
+mod_back_aic = step(mod_full, trace = 0)
+summary(mod_back_aic)
+diagnostics(mod_back_aic)
+
+```
+
+The tests for normality fail, so we should see how we can transform the model.
+
+We look at the `pairs` plot to see if any of the predictors are collinear. The output has been commented out for brevity for `pairs` charts that didn't show any relationships.
+
+```{r}
+#pairs(subset(data_2013, select=c('API13', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI','PCT_WH')), col = "dodgerblue")
+pairs(subset(data_2013,select=c('API13', 'MEALS', 'P_MIGED', 'P_DI', 'P_GATE')), col = "dodgerblue")
+#pairs(subset(data_2013,select=c('API13', 'NOT_HSG', 'HSG', 'SOME_COL', 'GRAD_SCH', )), col = "dodgerblue"))
+pairs(subset(data_2013,select=c('API13', 'CBMOB', 'DMOB','EMER', 'FULL')), col = "dodgerblue")
+cor_matrix = cor(subset(data_2013, select=-c(2)))
+(max_val = max(cor_matrix[upper.tri(cor_matrix)]))
+(which(cor_matrix == max_val, arr.ind = TRUE))
+
+```
+
+It looks like the following fields may be collinear: DMOB with CBMOB (which the "cor" function confirms, these two columns have the highest collinearity), so we will remove one of them, DMOB (district mobility). We also need to make sure not to include all the ethnic groups as predictors, because they will be highly collinear (as they add up to 100%). 
+
+```{r}
+
+mod_reduced = lm(API13 ~ CHARTER + PCT_AA + PCT_AI + PCT_AS + PCT_HI + PCT_PI + 
+    P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + CBMOB +  
+    NOT_HSG + SOME_COL + HSG + COL_GRAD + GRAD_SCH + EMER, data = data_2013)
+summary(mod_reduced)
+diagnostics(mod_reduced)
+```
+After removing a few collinear predictors, we notice that the model's adjusted r squared has not changed, but the assumptions are still violated.
+
+We then try performing Box-Cox transformation of the response:
+```{r}
+
+boxcox(mod_reduced, plotit = TRUE, lambda = seq(0, 5, by = 0.1))
+```
+
+We find that the best lambda in this case 2.8.
+```{r}
+lambda = 2.8
+mod_cox = lm((API13 ^ lambda - 1)/lambda ~CHARTER + PCT_AA + PCT_AI + PCT_AS + PCT_HI + PCT_PI + 
+    P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + CBMOB +  
+    NOT_HSG + COL_GRAD + GRAD_SCH + EMER, data = data_2013)
+summary(mod_cox)
+diagnostics(mod_cox)
+```
+
+The plots look better, but the model still does not pass the formal tests.
+
+We will then look at points with high leverage:
+```{r}
+sum(hatvalues(mod_cox) > 2 * mean(hatvalues(mod_cox)))
+sum(abs(rstandard(mod_cox)) > 2)
+```
+The numbers are fairly high, and it seems that removing influential overvations might help:
+
+
+```{r}
+cd = cooks.distance(mod_cox)
+mod_new = lm(formula(mod_cox), data = data_2013, subset = cd < 4 / length(cd))
+summary(mod_new)
+diagnostics(mod_new, alpha = 0.01)
+vif(mod_new)
+```
+```{r}
+# see how well we predict
+#pred_2010 = predict(mod_new, newdata = data_2010)
+#plot(pred_2010 ~ data_2010$API10, col = "dodgerblue", xlab = "Actual 2010 API score", ylab = "Predicted 2010 API score")
+#abline(a = 0, b = 1, col = "darkorange", lwd = 3)
+
+nd = data.frame(CHARTER = data_2007$CHARTER, PCT_AA = data_2007$PCT_AA, PCT_AI = data_2007$PCT_AI, PCT_AS = data_2007$PCT_AS, PCT_HI = data_2007$PCT_HI, PCT_PI = data_2007$PCT_PI, P_GATE = data_2007$P_GATE, P_MIGED = data_2007$P_MIGED, P_EL= data_2007$P_EL, P_RFEP = data_2007$P_RFEP, P_DI = data_2007$P_DI, CBMOB = data_2007$CBMOB, NOT_HSG = data_2007$NOT_HSG, COL_GRAD = data_2007$COL_GRAD, GRAD_SCH = data_2007$GRAD_SCH, EMER = data_2007$EMER)
+
+pred_2007_transformed = predict(mod_new, newdata = nd)
+
+pred_2007 = ( lambda * pred_2007_transformed + 1 ) ^ ( 1 / lambda )
+
+plot(pred_2007 ~ data_2007$API07, col = "dodgerblue", xlab = "Actual 2007 API score", ylab = "Predicted 2007 API score")
+abline(a = 0, b = 1, col = "darkorange", lwd = 3)
+
+#pred_2004 = predict(mod_new, newdata = data_2004)
+#plot(pred_2004 ~ data_2004_tst$API04, col = "dodgerblue", xlab = "Actual 2004 API score", ylab = "Predicted 2004 API score")
+# abline(a = 0, b = 1, col = "darkorange", lwd = 3)
+
+```
+Our model based on data from 2013 does a fairly good job at predicting API scores, however, on the low end of API scores, there is significant amount of variance.
+
+#Conclusions
+
+Even though the bptest rejected the null hypothesis of a constant variance, the `Fitted vs Residual` plot doesn't show any discernible patterns. The Shapiro test failed to reject the null hypothesis that the data was sampled from a normal distribution. The `vif()` check show slight collinearity for any of the final set of predictors. The QQ-Plot looks good.
+
+In this particular model, we see that the following predictors play a significant role: parent education, ethnicity, percentage of participants in gifted and talented education programs (P_GATE), school mobility, and whether the school is a charter school.
+
+We can probably hypothesize that parent's with higher education learn how to teach the kids more, or, since parent's education are highly tied with family economic income, that in higher income families parents' have more time to spend with their kids, and hence ensuring the kids success in school. Lastly we see that there is also high correlation of student's ethnicity. This may be due to the Asian's families seem to have a higher income. We can see that there's negative correlation between Asian family and being economically disadvantaged.
+
+Again this model is not the only model that will fit. Since ethnicity have a collinearity issue (since all percentages add up to 100%), the model will pick a particular ethnicity depending on the data set. So these predictors are not obsolete.
+
+We see that this model also predicts the student's test score somewhat well in the 2007 data set.
