@@ -1,5 +1,5 @@
 ---
-title: "Charter 2013"
+title: "A Study of Factors Predicting School Performance Over Time"
 author: "cindyst2, trapido2, bching3, rjs8"
 date: '07/30/2018'
 output:
@@ -11,6 +11,7 @@ urlcolor: cyan
 
 ## Introduction
 
+This is a study of factors predicting school performance over time. There are four separate years being analyzed, 2004, 2006, 2010, and 2013. We want to understand what factors affect school performance and whether those factors have changed over time.
 
 ## Dataset Description
 
