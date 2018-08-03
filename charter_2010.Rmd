@@ -11,13 +11,13 @@ urlcolor: cyan
 
 ## Introduction
 
-This study is to explore the different factors that could affects a student's test score. We want to come up with a model that helps us identify factors that correlate to a student's performance. We want to use the same model and see if these correlations carry through the years. 
+As part of California's accountability program, the state Deptarment of Education measures student academic performance and its growth. To achieve this goal, from 1999-2013, the California Department of Education annually calculated the Academic Performance Index (API) for all public schools. These data sets are publicly available at the California Department of Education web site, https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. 
 
-Specifically, the data set that we will use comes from https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. We will use the "2010 Growth API" data set to train a model. We will use the same model to predict the student's performance in the "2007 Growth API" data set.
+In addition to API scores, the dataset contains the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
 
-The dataset tracks the school's name, district, type (charter or not), student demographics, ranking in the state, class sizes, average parental education levels, and teacher credentials.
+This study explores the different factors that affect a student's test score. We want to come up with a model that helps us explain the student's test score with these factors, and use the model to predict the student's performance. We want to see how this model changes over 9 years, so each data set 3 years apart. 
 
-Our interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools. With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+Our interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools. With the test scores as the response, we hope to model how charter schools will perform compared to public schools using the other fields as predictors.
 
 ## Methods
 
@@ -295,7 +295,7 @@ data_2010 = conv_numeric(data_2010, num_columns)
 nrow(data_2010)
 ```
 
-We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid data, sample size of 350 gives us about 95% confidence with 5% of error to accurately representing the model.
+We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid data, sample size of 350 gives us about 95% confidence with 5% of error of accurately representing the model.
 
 ```{r}
 grp_num = 13
@@ -342,14 +342,14 @@ vif(mod_aic_2010)
 summary(mod_aic_2010)
 ```
 
-Even though this model has some high collinearity issue, it looks pretty promising! We see that ethnicity and parent's education seems to be highly related to student's API scores, we will focus on these predictors to fit our model. 
+Even though this model has some collinearity issues, it looks pretty promising! We see that ethnicity and parent's education seem to be highly related to student's API scores, we will focus on these predictors to fit our model. 
 
 
 ```{r, fig.width=30, fig.height=30}
 cor(subset(data_2010_trn,select=c('API10', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
 ```
 
-Since the entire ethnicity adds up to 100%, the ethnic percentage have a somewhat high collinearity. 
+Since the entire ethnicity adds up to 100%, the percentage of ethnic populations have a somewhat high collinearity. 
 
 ```{r}
 pairs(subset(data_2010_trn,select=c('API10', 'P_MIGED', 'P_DI')))
