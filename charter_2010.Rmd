@@ -1,70 +1,67 @@
 ---
-title: "Longitudinal study of factors influencing student academic performance in CA schools"
+title: "Charter 2010"
 author: "STAT 420, Summer 2018, bching3, cindyst2, rjs8, trapido2"
-output: html_document
+date: '07/30/2018'
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+## Indroduction
 
-```{r eval=FALSE}
-install.packages("foreign")
-```
+This study is to explore the different factors that affects a student's test score. We want to come up with a model that helps us explain the student's test score with these factors, and use the model to predict the student's performance. We want to see how this model changes over 9 years, each data set 3 years apart. 
 
-## Dataset Description
+Specifically, the data set that we will use comes from https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp. We will use the "2004 Growth API", "2007 Growth API", "2010 Growth API", and the "2013 Growth API".
 
 The dataset tracks the school's name, district, type (charter or not), student demographics, subject end of year test score averages, ranking in the state, class sizes, average parental education levels, and teacher credentials.
 
-With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
+Our interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools. With the test scores as the response, we hope to model how charter schools will perform as compared to public schools using the other fields as predictors.
 
-## Background
+## Methods
 
-School performance as recorded by the CA Dept. of Education from 1999-2013 (https://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp)
+Since we are observing 2004, 2007, 2010, and 2013, we will use the API scores from these respective years as our response. We will fit model for each year's data set. 
 
-## Interest
-
-Interest in this dataset is driven by the current administration's Education Secretary's push to increase the number of charter schools.
-
-## Proof of Loading the Dataset into R
-```{r}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(foreign)
-library(lmtest)
-library(faraway)
-schl2010 = read.dbf("data/api10gdb.dbf", as.is = TRUE)
-schl2013 = read.dbf("data/api13gdb.dbf", as.is = TRUE)
-#str(schl2010)
+library(ggplot2)
+library(latex2exp)
+library(lmtest)    # provides bptest()
+library(knitr)     # provides kable()
+library(readr)
+library(gridExtra)
+library(car)       # provides car
+library(caret)
 ```
-```{r}
-###################
-# Common Columns
-###################
 
-# Define some common columns
-# Factor Columns
-fac_pred = c('RTYPE', 'STYPE', 'SPED', 'SIZE', 'CHARTER', 
-             "YR_RND")
-
-# Numeric Columns
-num_pred = c("ST_RANK", "SIM_RANK",
-             "API10", "API13",
-             "CDS",
-             "AA_API", "AI_API", "AS_API", "FI_API", "HI_API", "PI_API", "WH_API", "MR_API",
-             "SD_API", "EL_API", "DI_API",
-             "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI","PCT_PI", "PCT_WH", "PCT_MR",
-             "MEALS", "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", "CBMOB", "DMOB", 
-             "ACS_K3", "ACS_46", "ACS_CORE", 
-             "PCT_RESP", "NOT_HSG", "HSG", "SOME_COL", "COL_GRAD", "GRAD_SCH", "AVG_ED",
-             "PEN_2", "PEN_35", "PEN_6", "PEN_78", "PEN_911","PEN_91",
-             "ENROLL", "TESTED", "SCI"
-             )
+```{r eval=FALSE,include=FALSE}
+install.packages("foreign")
 ```
 
 ```{r}
+set.seed(42)
+data_2013 = read.dbf("data/api13gdb.dbf")
+data_2010 = read.dbf("data/api10gdb.dbf", as.is = TRUE)
+data_2007 = read.dbf("data/api07gdb.dbf", as.is = TRUE)
+data_2004 = read.dbf("data/api04gdb.dbf", as.is = TRUE)
+```
 
-###################
-# Helper Functions
-###################
+```{r eval=FALSE,include=FALSE}
+View(data_2013)
+```
+
+We start out by looking at the data and removing any rows that have missing data since we would be unable to provide estimates for their values.
+
+We also remove columns that are redudant. For instance the data set represented test scores with different variations such as african american API test scores (AA_API*), however in this study we are only focusing on the final, average API test scores.
+
+We define some helper functions to aid up with data cleaning and model analysis
+
+```{r}
+#
+# Utility functions to manipulate the data.
+#
 
 # Function to remove exact column names
 remove_columns = function(dframe, columns_to_remove) {
@@ -92,18 +89,15 @@ show_columns_with_na = function(dframe, threshold = 0.5) {
   cn[col_na_ratios > threshold]
 }
 
-# Remove columns common in dataset
+# Remove columns that are commonly unwanted in dataset
 remove_common_columns = function(dframe) {
+  
   # Remove all _TARG, _MET, _SIG, columns which are just metadata about whether targets were met
   # or whether columns were significant.
   dframe = remove_columns_like(dframe, c("_TARG", "_MET", "_SIG", "_NUM", "_GROW"))
 
-  dframe$CHARTER = ifelse(is.na(dframe$CHARTER), "NC", dframe$CHARTER)
-
-  # Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
-
-  # Transform STYPE column by setting NA to 'O' to indicate other
-  dframe$STYPE = as.factor(ifelse(is.na(dframe$STYPE), "O", dframe$STYPE))
+  # Remove rows with YR_RND = Yes because they have mostly NA columns
+  dframe = subset(dframe, subset = dframe$YR_RND != 'Yes', select =!(colnames(dframe) %in% c('YR_RND')))
 
   # Remove the names because we have the school id in the first column
   dframe = remove_columns(dframe, c("SNAME", "DNAME", "CNAME"))
@@ -114,6 +108,27 @@ remove_common_columns = function(dframe) {
   # Remove ACS_K3, ACS_46, ACS_CORE, FULL, EMER because it's mostly if not all is NA
   dframe = remove_columns(dframe, c("ACS_K3", "ACS_46", "ACS_CORE", "FULL", "EMER"))
 
+ 
+  dframe
+}
+
+# Remove columns that are only there in 3 instead of 4 datasets
+remove_less_common = function(dframe) {
+  dframe$CHARTER = ifelse(is.na(dframe$CHARTER), "NC", dframe$CHARTER)
+
+  # Transform SPED column by setting NA to 'R' for regular b/c it uses NA to indicate regular schools
+  dframe$SPED = as.factor(ifelse(is.na(dframe$SPED), "R", dframe$SPED))
+  
+  # Remove schools with SIZE = S or T which indicate non-valid API scores
+  dframe = subset(dframe, subset = !(dframe$SIZE %in% c("S","T")), select =!(colnames(dframe) %in% c('SIZE')))
+
+  # Transform STYPE column by setting NA to 'O' to indicate other
+  dframe$STYPE = as.factor(ifelse(is.na(dframe$STYPE), "O", dframe$STYPE))
+  
+  # remove test scores related columns, because this is something we are trying to model
+  dframe = remove_columns_like(dframe, c("VCST_", "PCST_", "VCHS_", "PCHS", "CW_", "CWM2_", "CWS2_", "VCSTM2_", "PCSTM2_", "CWS_", "VCSTS2_", "PCSTS2_", "TOT_"))
+  dframe = remove_columns(dframe, c("TARGET", "GROWTH"))
+ 
   dframe
 }
 
@@ -129,7 +144,7 @@ conv_factor = function(dframe, columns_to_factor) {
 
 # convert all columsn to numeric
 conv_numeric = function(dframe, columns_to_numeric) {
-  for(col in num_pred) {
+  for(col in columns_to_numeric) {
     if(col %in% colnames(dframe[0,])) {
       dframe[, col] = as.numeric(dframe[, col])
     }
@@ -142,6 +157,7 @@ calc_loocv_rmse = function(model) {
   sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
 }
 
+# Function to plot qqplot and perform shapiro and bptest
 diagnostics = function(model, pcol = "grey", lcol = "dodgerblue", alpha = 0.05, 
                        plotit = TRUE, testit = TRUE) {
   
@@ -174,220 +190,406 @@ diagnostics = function(model, pcol = "grey", lcol = "dodgerblue", alpha = 0.05,
 }
 ```
 
+
+We define some columns so we can easily convert them to either factor or numeric
+
 ```{r}
+###################
+# Common Columns
+###################
+
+# Define some common columns
+# Factor Columns
+fact_columns = c("RTYPE", "STYPE", "SPED", "SIZE", "CHARTER", "YR_RND",
+                 "SCH_WIDE" , "COMP_IMP ", "BOTH", "AWARDS")
+
+# Numeric Columns
+num_columns = c("API09","API10", "API13", "API07", "API04",
+             "MEDIAN13","MEDIAN12","MEDIAN10","MEDIAN09","MEDIAN07","MEDIAN06","MEDIAN04","MEDIAN03",
+             "ST_RANK", "SIM_RANK", "sim_rank","st_rank", "SCI",
+             "CDS", "VALID",
+             "AA_API", "AI_API", "AS_API", "FI_API", "HI_API", "PI_API", "WH_API", "MR_API",
+             "SD_API", "EL_API", "DI_API",
+             "PCT_AA", "PCT_AI", "PCT_AS", "PCT_FI", "PCT_HI","PCT_PI", "PCT_WH", "PCT_MR",
+             "MEALS", "P_GATE",  "P_MIGED", "P_EL", "P_RFEP", "P_DI", 
+             "CBMOB", "DMOB", "SMOB",
+             "ACS_K3", "ACS_46", "ACS_CORE", 
+             "PCT_RESP", "NOT_HSG", "HSG", "SOME_COL", "COL_GRAD", "GRAD_SCH", "AVG_ED",
+             "PEN_2", "PEN_35", "PEN_6", "PEN_78", "PEN_911","PEN_91",
+             "ENROLL", "TESTED", 
+             "VCST_E28","PCST_E28","VCST_E91","PCST_E91","CW_CSTE",
+             "VCST_M28","PCST_M28","VCST_M91","PCST_M91","CW_CSTM",
+             "VCST_S28","PCST_S28","VCST_S91","PCST_S91","CWS_91",
+             "VCST_H28","PCST_H28","VCST_H91","PCST_H91","CW_CSTH",
+             "VCSTM2_91","PCSTM2_91","CWM2_91","CWS2_91","VCSTS2_91","PCSTS2_91",
+             "VCST_LS10","PCST_LS10","CWM2_28","VCSTM2_28","PCSTM2_28",
+              "VCHS_E","PCHS_E","CW_CHSE",
+             "VCHS_M","PCHS_M","CW_CHSM",
+              "TOT_28","TOT_91","CW_SCI",
+             "CAPA", 
+             "PAR_OPT", "PARENT_OPT", 
+             "GROWTH","TARGET"
+             )
+
+```
+
+```{r eval=FALSE, include=FALSE}
 #############################
-# Data Cleaning for 2010
+# Data Cleaning for 2004
 #############################
 # remove comoonly removable columns
-schl2010 = remove_common_columns(schl2010)
+data_2004 = remove_common_columns(data_2004)
 
 # Remove columns unique to the dataset
 # _api is related to API which we are trying to measure
-schl2010 = remove_columns_like(schl2010, c("_api10", "_API09"))
-
-# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
-schl2010 = subset(schl2010, subset = is.na(schl2010$sm10) & is.na(schl2010$sm09), select = !(colnames(schl2010) %in% c('sm10','sm09')))
+data_2004 = remove_columns_like(data_2004, c("_API04", "_API03"))
 
 # Remove rows with MEDIAN13 or MEDIAN12 = NA
-schl2010 = subset(schl2010, subset = !is.na(schl2010$MEDIAN10) | !is.na(schl2010$MEDIAN09))
-
-# Remove schl2010 rank that are I = Invalid, B = District, or C = Special Education schl2010
-#schl2010 = schl2010[!(schl2010$ST_RANK %in% c("I", "B", "C")), ]
-
-# Remove schl2010 similar rank that are I = Invalid, B = District, or C = Special Education schl2010
-#schl2010 = schl2010[!(schl2010$SIM_RANK %in% c("I", "B", "C", "O", "S")), ]
+#data_2004 = subset(data_2004, subset = !is.na(data_2004$MEDIAN04) | !is.na(data_2004$MEDIAN03))
 
 # Iterate with any columns that have NAs: either transfrom the NA to something else, 
 # or remove the column, or remove the row.
-# Remove columns if they don't look like they're needed according to this dataset's record layout 
+# Remove columns if they don"t look like they're needed according to this dataset's record layout
 # (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
-other_cols = show_columns_with_na(schl2010)
-schl2010 = remove_columns(schl2010, other_cols)
-schl2010 = na.omit(schl2010)
+other_cols = show_columns_with_na(data_2004)
+data_2004 = remove_columns(data_2004, other_cols)
+data_2004 = na.omit(data_2004)
 
 # convert columns to factor
-schl2010 = conv_factor(schl2010, fac_pred)
+data_2004 = conv_factor(data_2004, fact_columns)
 
 # convert columns to numeric
-schl2010 = conv_numeric(schl2010, num_pred)
+data_2004 = conv_numeric(data_2004, num_columns)
+nrow(data_2004)
+ncol(data_2004)
+
+```
+
+
+```{r}
+#############################
+# Data Cleaning for 2007
+#############################
+# remove comonly removable columns
+data_2007 = remove_common_columns(data_2007)
+
+# assign none charter schools as NC
+data_2007$CHARTER = ifelse(is.na(data_2007$CHARTER), "NC", data_2007$CHARTER)
+
+# Remove columns unique to the dataset
+# _api is related to API which we are trying to measure
+data_2007 = remove_columns_like(data_2007, c("_API07", "_API06"))
+
+# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+data_2007 = subset(data_2007, subset = is.na(data_2007$sm07) & is.na(data_2007$sm06), select = !(colnames(data_2007) %in% c('sm07','sm06')))
+
+# Remove rows with MEDIAN13 or MEDIAN12 = NA
+data_2007 = subset(data_2007, subset = !is.na(data_2007$MEDIAN07) | !is.na(data_2007$MEDIAN06))
+
+# Remove all fields with component test scores because this is what we're trying to find relationships for.
+data_2007 = remove_columns_like(data_2007, c("VCST_", "PCST_", "VCHS_", "PCHS", "CW_", "CWM2_", "CWS2_", "VCSTM2_", "PCSTM2_", "CWS_", "VCSTS2_", "PCSTS2_", "TOT_"))
+data_2007 = remove_columns(data_2007, c("API07", "TARGET", "GROWTH", "COMP_IMP", "MEDIAN07", "MEDIAN06"))
+
+# Iterate with any columns that have NAs: either transfrom the NA to something else, 
+# or remove the column, or remove the row.
+# Remove columns if they don't look like they're needed according to this dataset's record layout
+# (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
+other_cols = show_columns_with_na(data_2007)
+data_2007 = remove_columns(data_2007, other_cols)
+data_2007 = na.omit(data_2007)
+
+unique(data_2007$RTYPE) # yields only one factor in dataset, so remove the column
+data_2007 = remove_columns(data_2007, c("RTYPE"))
+
+# convert columns to factor
+data_2007 = conv_factor(data_2007, fact_columns)
+
+# convert columns to numeric
+data_2007 = conv_numeric(data_2007, num_columns)
+nrow(data_2007)
+ncol(data_2007)
+
+#############################
+# Data Cleaning for 2010
+#############################
+# remove comonly removable columns
+data_2010 = remove_common_columns(data_2010)
+
+# assign NC to none charter schools
+data_2010$CHARTER = ifelse(is.na(data_2010$CHARTER), "NC", data_2010$CHARTER)
+
+# Remove columns unique to the dataset
+# _api is related to API which we are trying to measure
+data_2010 = remove_columns_like(data_2010, c("_api10", "_API09"))
+
+# Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
+data_2010 = subset(data_2010, subset = is.na(data_2010$sm10) & is.na(data_2010$sm09), select = !(colnames(data_2010) %in% c('sm10','sm09')))
+
+# Remove rows with MEDIAN13 or MEDIAN12 = NA
+data_2010 = subset(data_2010, subset = !is.na(data_2010$MEDIAN10) | !is.na(data_2010$MEDIAN09))
+
+# Remove all fields with component test scores because this is what we're trying to find relationships for.
+data_2010 = remove_columns(data_2010, c("API09", "TARGET", "GROWTH", "COMP_IMP", "MEDIAN10", "MEDIAN09"))
+
+# Remove columns with too many NA
+other_cols = show_columns_with_na(data_2010)
+data_2010 = remove_columns(data_2010, other_cols)
+data_2010 = na.omit(data_2010)
+
+unique(data_2010$RTYPE) # yields only one factor in dataset, so remove the column
+data_2010 = remove_columns(data_2010, c("RTYPE"))
+
+
+# convert columns to factor
+data_2010 = conv_factor(data_2010, fact_columns)
+
+# convert columns to numeric
+data_2010 = conv_numeric(data_2010, num_columns)
+
+nrow(data_2010)
 
 #############################
 # Data Cleaning for 2013
 #############################
-# remove comoonly removable columns
-schl2013 = remove_common_columns(schl2013)
+# remove comonly removable columns
+data_2013 = remove_common_columns(data_2013)
+
+data_2013$CHARTER = ifelse(is.na(data_2013$CHARTER), "NC", data_2013$CHARTER)
 
 # Remove columns unique to the dataset
 # _api is related to API which we are trying to measure
-schl2013 = remove_columns_like(schl2013, c("_API12", "_API13"))
+data_2013 = remove_columns_like(data_2013, c("_API12", "_API13"))
 
 # Remove schools designated as small for GROWTH and BASE purposes. It uses NA to mean not-small.
-schl2013 = subset(schl2013, subset = is.na(schl2013$SM12) & is.na(schl2013$SM13), select = !(colnames(schl2013) %in% c('SM12','SM13')))
+data_2013 = subset(data_2013, subset = is.na(data_2013$SM12) & is.na(data_2013$SM13), select = !(colnames(data_2013) %in% c('SM12','SM13')))
 
 # Remove rows with MEDIAN13 or MEDIAN12 = NA
-schl2013 = subset(schl2013, subset = !is.na(schl2013$MEDIAN13) | !is.na(schl2013$MEDIAN12))
+data_2013 = subset(data_2013, subset = !is.na(data_2013$MEDIAN13) | !is.na(data_2013$MEDIAN12))
 
 # Iterate with any columns that have NAs: either transfrom the NA to something else, 
 # or remove the column, or remove the row.
 # Remove columns if they don't look like they're needed according to this dataset's record layout 
 # (https://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp)
-other_cols = show_columns_with_na(schl2013)
-schl2013 = remove_columns(schl2013, other_cols)
-schl2013 = na.omit(schl2013)
+other_cols = show_columns_with_na(data_2013)
+data_2013 = remove_columns(data_2013, other_cols)
+data_2013 = na.omit(data_2013)
+
+# remove school identifier
+data_2013 = remove_columns(data_2013, c("CDS"))
+
+# this seems to have more than one?
+unique(data_2013$RTYPE) # yields only one factor in dataset, so remove the column
+#data_2013 = remove_columns(data_2013, c("RTYPE"))
 
 # convert columns to factor
-schl2013 = conv_factor(schl2013, fac_pred)
+data_2013 = conv_factor(data_2013, fact_columns)
 
 # convert columns to numeric
-schl2013 = conv_numeric(schl2013, num_pred)
-```
+data_2013 = conv_numeric(data_2013, num_columns)
+nrow(data_2013)
+`````
 
+We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000  valid data, samle size of 350 gives us about 95% confidence of accurately representing the model.
 
 ```{r}
-seed = 1
-set.seed(seed)
-##########################################
-# Randomly select samples that we want to model
-#########################################
+grp_num = 13
+set.seed(grp_num)
+sample_size = 700
 
+#
+# Randomly draw sample_size samples from dataset
+# Split samples evenly into train and test
+#
+
+# 2004
+# Split the dataset into training and test data set
 # Randomly select 600 observations from 2010 data set
-ridx = sample(nrow(schl2010), 600)
-schl2010 = schl2010[ridx, ]
+ridx = sample(nrow(data_2004), sample_size)
+data_2004 = data_2004[ridx, ]
 
 # split dataframe into training and test
-(n = nrow(schl2010))
-trn_idx = sample(nrow(schl2010), n/2)
-schl2010_trn = schl2010[trn_idx, ]
-schl2010_tst = schl2010[-trn_idx, ]
+(n = nrow(data_2004))
+trn_idx = sample(nrow(data_2004), n/2)
+data_2004_trn = data_2004[trn_idx, ]
+data_2004_tst = data_2004[-trn_idx, ]
 
+# 2007
+# Split the dataset into training and test data set
 # Randomly select 600 observations from 2010 data set
-ridx = sample(nrow(schl2013), 600)
-schl2013 = schl2013[ridx, ]
+ridx = sample(nrow(data_2007), sample_size)
+data_2007 = data_2007[ridx, ]
 
 # split dataframe into training and test
-(n = nrow(schl2013))
-trn_idx = sample(nrow(schl2013), n/2)
-schl2013_trn = schl2013[trn_idx, ]
-schl2013_tst = schl2013[-trn_idx, ]
+(n = nrow(data_2007))
+trn_idx = sample(nrow(data_2007), n/2)
+data_2007_trn = data_2007[trn_idx, ]
+data_2007_tst = data_2007[-trn_idx, ]
+
+# 2010
+# Split the dataset into training and test data set
+# Randomly select 600 observations from 2010 data set
+ridx = sample(nrow(data_2010), sample_size)
+data_2010 = data_2010[ridx, ]
+
+# split dataframe into training and test
+(n = nrow(data_2010))
+trn_idx = sample(nrow(data_2010), n/2)
+data_2010_trn = data_2010[trn_idx, ]
+data_2010_tst = data_2010[-trn_idx, ]
+
+# 2013
+# Split the dataset into training and test data set
+# Randomly select 600 observations from 2010 data set
+ridx = sample(nrow(data_2013), sample_size)
+data_2013 = data_2013[ridx, ]
+
+# split dataframe into training and test
+(n = nrow(data_2013))
+trn_idx = sample(nrow(data_2013), n/2)
+data_2013_trn = data_2013[trn_idx, ]
+data_2013_tst = data_2013[-trn_idx, ]
 ```
 
+We try to fit all the predictors and see if any of the predictors seems promising:
+
 ```{r}
-# we leave out STYPE because it can be represented by student enrollment per grade (PEN_2..)
-# we leaving out NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH because they can be represented by AVG_ED
-# We leave out TESTEd because it's highly related with ENROLL
-schl2010_big_mod = lm(API10 ~ #.,
-                (PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 +
-                   CDS +
-                   CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
-                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_MR + PCT_WH + 
-                MEALS +  # MEALS is highly correlated with AVG_ED
-                  P_GATE + P_MIGED + P_RFEP + P_DI +  P_EL +
-                CBMOB + DMOB + 
-                PCT_RESP + 
-                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
-                ENROLL # #TESTED +#highly correlated with ENROLL
-                   #+ YR_RND #+ SCI depends on API
-                ) ,
-              data = schl2010_trn)
-
-schl_aic = step(schl2010_big_mod, direction = "backward", k = log(n), trace = FALSE, maxit = 100)
+mod_big_2010 = lm(API10  ~ . , data = data_2010_trn )
+n = nrow(data_2010_trn)
+mod_aic_2010 = step(mod_big_2010, direction = "backward", k = log(n), trace = FALSE)
 
 # check assumptions
-bptest(schl_aic)
-shapiro.test(resid(schl_aic))
+diagnostics(mod_aic_2010)
+vif(mod_aic_2010) 
 
-# check how the model is fitting
-summary(schl_aic)
-vif(schl_aic) 
+summary(mod_aic_2010)
+```
+
+Eventhough this model has some high collinearity issue, it looks pretty promising! We see that ethnicity and parent's education seems to be highly related to student's API scores, we will focus on these predictors to fit our model. 
 
 
-schl2013_big_mod = lm(API13 ~ #.,
-                (PEN_2 + PEN_35 + PEN_6 + PEN_78 + PEN_911 +
-                   CDS +
-                   CHARTER + # ST_RANK + SIM_RANK + GR_TARG +
-                PCT_AA + PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_MR + PCT_WH + 
-                MEALS +  # MEALS is highly correlated with AVG_ED
-                  P_GATE + P_MIGED + P_RFEP + P_DI +  P_EL +
-                CBMOB + DMOB + 
-                PCT_RESP + 
-                AVG_ED +# NOT_HSG + HSG + SOME_COL + COL_GRAD + GRAD_SCH +
-                ENROLL # #TESTED +#highly correlated with ENROLL
-                   #+ YR_RND #+ SCI depends on API
-                ) ,
-              data = schl2013_trn)
+```{r, fig.width=30, fig.height=30}
+cor(subset(data_2013,select=c('API13', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
+```
 
-schl13_aic = step(schl2013_big_mod, direction = "backward", k = log(n), trace = FALSE, maxit = 100)
+Since the entire ethnicity adds up to 100%, the ethnic percentage have a somewhat high collinearity. 
 
-# check assumptions
-bptest(schl13_aic)
-shapiro.test(resid(schl13_aic))
-
-# check how the model is fitting
-summary(schl13_aic)
-vif(schl13_aic) 
+```{r}
+pairs(subset(data_2013,select=c('API13', 'P_MIGED', 'P_DI')))
 ```
 
 
+```{r}
+pairs(subset(data_2013,select=c('API13', 'MEALS', 'AVG_ED')))
+```
+
+`MEALS` corresponds to student's elegibility for free or rduced price meal program. Perhaps it is not suprising to see that `MEALS` are higly correlated with the parent's education level `AVG_ED`. 
 
 ```{r}
+#################
+# 2004
+#################
+#   
+# mod_2004 = lm(API04  ~ PCT_AS +  log(PCT_HI)  + PCT_WH   +   DMOB + PCT_RESP +  (AVG_ED) +  ENROLL , data = data_2004_trn )
+# 
+# 
+# # check assumptions
+# diagnostics(mod_2004)
+# 
+# # check how the model is fitting
+# summary(mod_2004)
+# vif(mod_2004) 
+# calc_loocv_rmse(mod_2004)
+# 
+# pred = predict(mod_2004, newdata = data_2004_tst)
+# plot(pred ~ mod_2004$API04, col = "dodgerblue")
+
+#################
+# 2007
+#################
+# schl2010_fit = lm(API10  ~ PEN_2  +  PEN_35 + PEN_6   + PEN_78  + poly(PCT_AA, 2) + poly(PCT_AI, 1) + poly(PCT_AS, 2) + poly(PCT_WH, 2) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
+#                data = data_2010_trn)
+  
+#  mod_2007 = lm(API07  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = data_2007_trn )
+#   
+#   
+# # check assumptions
+# diagnostics(mod_2007)
+# 
+# # check how the model is fitting
+# summary(mod_2007)
+# vif(mod_2007) 
+# calc_loocv_rmse(mod_2007)
+# 
+# pred = predict(mod_2007, newdata = data_2007_tst)
+# plot(pred ~ data_2007_tst$API07, col = "dodgerblue")
+
 #################
 # 2010
 #################
-# schl2010_fit = lm(API10  ~ PEN_2  +  PEN_35 + PEN_6   + PEN_78  + poly(PCT_AA, 2) + poly(PCT_AI, 1) + poly(PCT_AS, 2) + poly(PCT_WH, 2) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + poly(MEALS, 1) ,
-#                data = schl2010_trn)
-  
- schl2010_fit = lm(API10  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = schl2010_trn )
-
- 
-  
-# check assumptions
-diagnostics(schl2010_fit)
-
-# check how the model is fitting
-summary(schl2010_fit)
-vif(schl2010_fit) 
-calc_loocv_rmse(schl2010_fit)
-
-pred = predict(schl2010_fit, newdata = schl2010_tst)
-plot(pred ~ schl2010_tst$API10, col = "dodgerblue")
+mod_2010 = lm(API10  ~ PEN_2 +  PEN_35 +  poly(PCT_AS, 2) +  PCT_AA  + PCT_WH     + P_GATE +    P_EL  +   DMOB + PCT_RESP + P_MIGED + poly(AVG_ED, 3) +  ENROLL, data = data_2010_trn )
 
 #################
 # 2013
 #################
-# schl2013_fit = lm(API13  ~ PEN_78 + PEN_911 + poly(PCT_AA, 2) + poly(PCT_AI, 2) + poly(PCT_AS, 3) + poly(PCT_WH, 2) + poly(P_GATE, 1) + P_MIGED + poly(AVG_ED, 4) + MEALS ,
-#                data = schl2013_trn)
- # schl2013_fit = lm(API13  ~ PEN_2 +  PEN_35 +  PCT_AS +  log(PCT_HI)  + (PCT_WH)     + P_GATE +    P_EL  +   DMOB + PCT_RESP +  poly(AVG_ED, 3) +  ENROLL , data = schl2013_trn )
 
-schl2013_fit = lm(API13 ~    PEN_2 +  PEN_35 +   PEN_6  + PEN_78 +  poly(PCT_AS, 2) +  poly(PCT_FI, 1) +   PCT_HI +   poly(PCT_WH, 1)  +   P_EL  +  log(CBMOB) + poly(AVG_ED, 3), data =  schl2013_trn)
+mod_2013 = lm(API13 ~    PEN_2 +  PEN_35 +   PEN_6  + PEN_78 +  poly(PCT_AS, 2) +  poly(PCT_FI, 1) +   PCT_HI +   poly(PCT_WH, 1)  +   P_EL  +  log(CBMOB) + poly(AVG_ED, 4), data =  data_2013_trn)
   
+```
+
+## Results
+
+```{r}
 # check assumptions
-diagnostics(schl2013_fit)
+diagnostics(mod_2010)
 
 # check how the model is fitting
-summary(schl2013_fit)
-vif(schl2013_fit) 
-calc_loocv_rmse(schl2013_fit)
+summary(mod_2010)
+vif(mod_2010)
 
-pred = predict(schl2013_fit, newdata = schl2013_tst)
-plot(pred ~ schl2013_tst$API13, col = "dodgerblue")
+# seeing if we are overfitting
+#calc_loocv_rmse(mod_2010)
+
 ```
 
 ```{r}
 
+# see how well we predict
+pred = predict(mod_2010, newdata = data_2010_tst)
+plot(pred ~ data_2010_tst$API10, col = "dodgerblue", xlab = "Actual 2010 API score", ylab = "Predictored 2010 API score")
+abline(a = 0, b = 1, col = "darkorange", lwd = 3)
+
 ```
 
 
-### Methodology
+## Discussion
 
-- Split data into charter and non-charter.
-- Fit models with performance as a response for both.
-- Check normality assumptions.
-- Responses: english score, math score, science score, exit exam score, state rank
-- Factors: parental education, class size, teacher with full credentials, teacher with emergency credentials, student race, district, county
-- Study should answer which factors are most relevant to performance, and the differences in those factors between charter schools and public schools
-- Plot a longtitude study of how these factors affect the response change over time
+We fit a model with 2010 API scores as the response. The model passes both bptest and shapiro test, so none of the assumptions are violated. 
+
+Looking at the `GVIF^(1/(2*Df))` column, we also see that none of the predictors have collinearity issue. 
+
+In this particular model, we see that the following predictors being significant  with a significance level of 0.05:
+
+- Parent's average education (AVG_ED)
+- Ethnicity (PCT_AS, PCT_AA, PCT_WH)
+- Percentage of participants in gifted and talented education programs (P_GATE)
+- Percentage of enrollment for 3~5 grades (PEN_35)
+- Percent of Student Answer Documents with Parent Education Level Information(PCT_RESP)
+- Percentage of continuously enrolled since that date (DMOB)
+
+Amongst the predictors, the coefficient for parent's education level is the highest, with an estimate of `r coef(mod_2010)['poly(AVG_ED, 3)1']`, then  followed by the whether the student is asian or not, with an estimation of `r coef(mod_2010)['poly(PCT_AS, 2)1']`. Please note that those coefficients are related to the first order term, higher order terms actually has negative coefficients. 
+
+We can probably hypothesize that parent's with higher education learn how to teach the kids more, or, since parent's education are highly tied with family economic income, that in higher income families parents' have more time to spend with their kids, and hence ensuring the kids success in school. Lastly we see that there is also high correlation of student's ethnicity. This may be due to the Asian's families seem to have a higher income. We can see that there's negative correlation between asian family and being economically disadvantaged. 
 
 ```{r}
-
+cor(data_2010_trn[, c("PCT_AS", "MEALS")])
 ```
+
+Again this model is not the only model that will fit. Since ethnicity have a collinearity issue (since all percentages add up to 100%), the model will pick a particular ethnicity depending on the data set. So these predictors are not obsolete. 
+
+Conflusion, seems that the main factor of affecting the student's test score are the family's background in education and income level. There doesn't seem much of an impact from school here. We see that there are no affects on whether the school is a charter school or not. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economially disadvantaged first. Finally, please note that these results simply are correlation and not causation.
+
+
+## Appendix
+
+Tools to help us calculate sample size needed: https://www.qualtrics.com/blog/calculating-sample-size/
 
