@@ -8,10 +8,8 @@ output:
   pdf_document: default
 urlcolor: cyan
 ---
-
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+options(scipen = 1, digits = 4, width = 80, fig.align = "center")
 ```
 
 ```{r eval=FALSE}
@@ -42,7 +40,7 @@ We would like to find out which factors predict the academic performance of a sc
 
 We will use API scores as our response. Since we are observing 2004, 2007, 2010, and 2013, we will use the API scores from these respective years as our response. We will build a model base on data from one year and see how well it predicts API scores from other years. 
 
-# Data Cleaning
+#Cleaning the data
 ```{r}
 schl2004 = read.dbf("data/api04gdb.dbf", as.is = TRUE)
 schl2007 = read.dbf("data/api07gdb.dbf", as.is = TRUE)
@@ -148,15 +146,13 @@ data_2013 = create_subset(schl2013, "13")
 ```
 
 ```{r}
-#Removing observations that have missing API scores
+#Remove observations that have missing API scores
 data_2004 = data_2004[complete.cases(data_2004$API04),]
-dim(data_2004)
 data_2007 = data_2007[complete.cases(data_2007$API07),]
 data_2010 = data_2010[complete.cases(data_2010$API10),]
 data_2013 = data_2013[complete.cases(data_2013$API13),]
-
+# Remove rows with YR_RND = Yes because they have mostly NA columns
 data_2004 = subset(data_2004, subset = (data_2004$YR_RND != 'Yes'), select =!(colnames(data_2004) %in% c('YR_RND')))
-
 #Remove rows with invalid data for parent education ("0" is most likely missing data)
 data_2004 = subset(data_2004, subset = AVG_ED != 0)
 data_2007 = cleanup(data_2007)
@@ -174,9 +170,9 @@ data_2010$CHARTER = as.factor(ifelse(is.na(data_2010$CHARTER), "N", "Y"))
 data_2013$CHARTER = as.factor(ifelse(is.na(data_2013$CHARTER), "N", "Y"))
 ```
 
-The rest of the variables are numeric:
+The rest of the variables in our set are numeric:
 
-```{r}
+```{r warning = FALSE, message = FALSE}
 common_cols = c("PCT_AA","PCT_AI","PCT_AS","PCT_FI","PCT_HI","PCT_PI","PCT_WH","MEALS","CBMOB","DMOB","ACS_K3","ACS_46","ACS_CORE","NOT_HSG","HSG","SOME_COL","COL_GRAD", "GRAD_SCH","AVG_ED","FULL","EMER")
 all_cols = c(common_cols, "P_GATE","P_MIGED","P_EL","P_RFEP","P_DI")
 data_2004 = convert_to_numeric(data_2004, c("API04", common_cols))
@@ -212,7 +208,7 @@ data_2013 = remove_columns(data_2013, c('ACS_', 'AVG_ED'))
 ```
 
 
-#Building a model
+##Building the model
 
 We will use backward AIC selection:
 ```{r}
@@ -229,7 +225,7 @@ We look at the `pairs` plot to see if any of the predictors are collinear. The o
 
 ```{r}
 #pairs(subset(data_2013, select=c('API13', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI','PCT_WH')), col = "dodgerblue")
-pairs(subset(data_2013,select=c('API13', 'MEALS', 'P_MIGED', 'P_DI', 'P_GATE')), col = "dodgerblue")
+#pairs(subset(data_2013,select=c('API13', 'MEALS', 'P_MIGED', 'P_DI', 'P_GATE')), col = "dodgerblue")
 #pairs(subset(data_2013,select=c('API13', 'NOT_HSG', 'HSG', 'SOME_COL', 'GRAD_SCH', )), col = "dodgerblue"))
 pairs(subset(data_2013,select=c('API13', 'CBMOB', 'DMOB','EMER', 'FULL')), col = "dodgerblue")
 cor_matrix = cor(subset(data_2013, select=-c(2)))
@@ -238,7 +234,7 @@ cor_matrix = cor(subset(data_2013, select=-c(2)))
 
 ```
 
-It looks like the following fields may be collinear: DMOB with CBMOB (which the "cor" function confirms, these two columns have the highest collinearity), so we will remove one of them, DMOB (district mobility). We also need to make sure not to include all the ethnic groups as predictors, because they will be highly collinear (as they add up to 100%). 
+It looks like the following fields may be collinear: DMOB with CBMOB (which the "cor" function confirms, these two columns have the highest collinearity), so we will remove one of them, DMOB (district mobility). We also need to make sure not to include all the ethnic groups as predictors, because they will be highly collinear (as they add up to 100%). There is also some collinearity between FULL and EMER (percentage of teachers with full and emergency credentials).
 
 ```{r}
 
@@ -256,12 +252,11 @@ We then try performing Box-Cox transformation of the response:
 boxcox(mod_reduced, plotit = TRUE, lambda = seq(0, 5, by = 0.1))
 ```
 
-We find that the best lambda in this case 2.8.
+We find that the best lambda in this case 2.85.
 ```{r}
-lambda = 2.8
+lambda = 2.85
 mod_cox = lm((API13 ^ lambda - 1)/lambda ~CHARTER + PCT_AA + PCT_AI + PCT_AS + PCT_HI + PCT_PI + 
-    P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + CBMOB +  
-    NOT_HSG + COL_GRAD + GRAD_SCH + EMER, data = data_2013)
+    P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + CBMOB + NOT_HSG + HSG + COL_GRAD + GRAD_SCH + EMER, data = data_2013)
 summary(mod_cox)
 diagnostics(mod_cox)
 ```
@@ -283,33 +278,30 @@ summary(mod_new)
 diagnostics(mod_new, alpha = 0.01)
 vif(mod_new)
 ```
+Removing points with large Cooks distance results in better plots; Shapiro-Wilk test now fails to reject the null at alpha = 0.01.
+
 ```{r}
 # see how well we predict
-#pred_2010 = predict(mod_new, newdata = data_2010)
-#plot(pred_2010 ~ data_2010$API10, col = "dodgerblue", xlab = "Actual 2010 API score", ylab = "Predicted 2010 API score")
-#abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
-nd = data.frame(CHARTER = data_2007$CHARTER, PCT_AA = data_2007$PCT_AA, PCT_AI = data_2007$PCT_AI, PCT_AS = data_2007$PCT_AS, PCT_HI = data_2007$PCT_HI, PCT_PI = data_2007$PCT_PI, P_GATE = data_2007$P_GATE, P_MIGED = data_2007$P_MIGED, P_EL= data_2007$P_EL, P_RFEP = data_2007$P_RFEP, P_DI = data_2007$P_DI, CBMOB = data_2007$CBMOB, NOT_HSG = data_2007$NOT_HSG, COL_GRAD = data_2007$COL_GRAD, GRAD_SCH = data_2007$GRAD_SCH, EMER = data_2007$EMER)
+nd = data.frame(CHARTER = data_2007$CHARTER, PCT_AA = data_2007$PCT_AA, PCT_AI = data_2007$PCT_AI, PCT_AS = data_2007$PCT_AS, PCT_HI = data_2007$PCT_HI, PCT_PI = data_2007$PCT_PI, P_GATE = data_2007$P_GATE, P_MIGED = data_2007$P_MIGED, P_EL= data_2007$P_EL, P_RFEP = data_2007$P_RFEP, P_DI = data_2007$P_DI, CBMOB = data_2007$CBMOB, HSG = data_2007$HSG, NOT_HSG = data_2007$NOT_HSG, COL_GRAD = data_2007$COL_GRAD, GRAD_SCH = data_2007$GRAD_SCH, EMER = data_2007$EMER)
 
 pred_2007_transformed = predict(mod_new, newdata = nd)
 
+#BEcause we transformed our response variable, we need to convert it back to the original scale.
 pred_2007 = ( lambda * pred_2007_transformed + 1 ) ^ ( 1 / lambda )
 
 plot(pred_2007 ~ data_2007$API07, col = "dodgerblue", xlab = "Actual 2007 API score", ylab = "Predicted 2007 API score")
 abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
-#pred_2004 = predict(mod_new, newdata = data_2004)
-#plot(pred_2004 ~ data_2004_tst$API04, col = "dodgerblue", xlab = "Actual 2004 API score", ylab = "Predicted 2004 API score")
-# abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
 ```
 Our model based on data from 2013 does a fairly good job at predicting API scores, however, on the low end of API scores, there is significant amount of variance.
 
 #Conclusions
 
-Even though the bptest rejected the null hypothesis of a constant variance, the `Fitted vs Residual` plot doesn't show any discernible patterns. The Shapiro test failed to reject the null hypothesis that the data was sampled from a normal distribution. The `vif()` check show slight collinearity for any of the final set of predictors. The QQ-Plot looks good.
+Even though the bptest rejected the null hypothesis of a constant variance, the `Fitted vs Residual` plot doesn't show any discernible patterns. The Shapiro test failed to reject the null hypothesis that the data was sampled from a normal distribution. The `vif()` check show slight collinearity for several predictors in the final model, with the highest VIF value of 9.3. The QQ-Plot looks good.
 
-In this particular model, we see that the following predictors play a significant role: parent education, ethnicity, percentage of participants in gifted and talented education programs (P_GATE), school mobility, and whether the school is a charter school.
+In this particular model, we see that the following predictors play a significant role: parent education, ethnicity, percentage of participants in gifted and talented education programs (P_GATE), school mobility, and whether the school is a charter school. However, we also see that the effect of Charter school is fairly small: before the transormation, our model was showing that there is a difference of 5 points in API scores between charter and non-charter schools.
 
 We can probably hypothesize that parent's with higher education learn how to teach the kids more, or, since parent's education are highly tied with family economic income, that in higher income families parents' have more time to spend with their kids, and hence ensuring the kids success in school. Lastly we see that there is also high correlation of student's ethnicity. This may be due to the Asian's families seem to have a higher income. We can see that there's negative correlation between Asian family and being economically disadvantaged.
 
