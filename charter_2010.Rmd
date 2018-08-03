@@ -463,14 +463,14 @@ vif(mod_aic_2010)
 summary(mod_aic_2010)
 ```
 
-Even though this model has some high collinearity issue, it looks pretty promising! We see that ethnicity and parent's education seems to be highly related to student's API scores, we will focus on these predictors to fit our model. 
+Even though this model has some collinearity issues, it looks pretty promising! We see that ethnicity and parent's education seem to be highly related to student's API scores, we will focus on these predictors to fit our model. 
 
 
 ```{r, fig.width=30, fig.height=30}
 cor(subset(data_2013,select=c('API13', 'PCT_AA', 'PCT_AI', 'PCT_AS', 'PCT_FI', 'PCT_HI', 'PCT_PI', 'PCT_WH', 'PCT_MR')))
 ```
 
-Since the entire ethnicity adds up to 100%, the ethnic percentage have a somewhat high collinearity. 
+Since the entire ethnicity adds up to 100%, the percentage of ethnic populations have a somewhat high collinearity. 
 
 ```{r}
 pairs(subset(data_2013,select=c('API13', 'P_MIGED', 'P_DI')))
