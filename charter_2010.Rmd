@@ -102,28 +102,12 @@ remove_common_columns = function(dframe) {
 
   # Remove ACS_K3, ACS_46, ACS_CORE, FULL, EMER because it's mostly if not all is NA
   dframe = remove_columns(dframe, c("ACS_K3", "ACS_46", "ACS_CORE", "FULL", "EMER"))
-
- 
-  dframe
-}
-
-# Remove columns that are only there in 3 instead of 4 datasets
-remove_less_common = function(dframe) {
-  dframe$CHARTER = ifelse(is.na(dframe$CHARTER), "NC", dframe$CHARTER)
-
-  # Transform SPED column by setting NA to 'R' for regular b/c it uses NA to indicate regular schools
-  dframe$SPED = as.factor(ifelse(is.na(dframe$SPED), "R", dframe$SPED))
-  
-  # Remove schools with SIZE = S or T which indicate non-valid API scores
-  dframe = subset(dframe, subset = !(dframe$SIZE %in% c("S","T")), select =!(colnames(dframe) %in% c('SIZE')))
-
-  # Transform STYPE column by setting NA to 'O' to indicate other
-  dframe$STYPE = as.factor(ifelse(is.na(dframe$STYPE), "O", dframe$STYPE))
-  
-  # remove test scores related columns, because this is something we are trying to model
+  # Remove all fields with component test scores because this is what we're trying to find relationships for.
   dframe = remove_columns_like(dframe, c("VCST_", "PCST_", "VCHS_", "PCHS", "CW_", "CWM2_", "CWS2_", "VCSTM2_", "PCSTM2_", "CWS_", "VCSTS2_", "PCSTS2_", "TOT_"))
-  dframe = remove_columns(dframe, c("TARGET", "GROWTH"))
  
+  dframe = remove_columns_like(dframe, c("GRAD", "HSG", "SOME_COL"))
+
+  
   dframe
 }
 
@@ -251,7 +235,6 @@ data_2007 = subset(data_2007, subset = is.na(data_2007$sm07) & is.na(data_2007$s
 data_2007 = subset(data_2007, subset = !is.na(data_2007$MEDIAN07) | !is.na(data_2007$MEDIAN06))
 
 # Remove all fields with component test scores because this is what we're trying to find relationships for.
-data_2007 = remove_columns_like(data_2007, c("VCST_", "PCST_", "VCHS_", "PCHS", "CW_", "CWM2_", "CWS2_", "VCSTM2_", "PCSTM2_", "CWS_", "VCSTS2_", "PCSTS2_", "TOT_"))
 data_2007 = remove_columns(data_2007, c("API07", "TARGET", "GROWTH", "COMP_IMP", "MEDIAN07", "MEDIAN06"))
 
 # Iterate with any columns that have NAs: either transform the NA to something else, 
@@ -293,10 +276,7 @@ data_2010 = subset(data_2010, subset = is.na(data_2010$sm10) & is.na(data_2010$s
 data_2010 = subset(data_2010, subset = !is.na(data_2010$MEDIAN10) | !is.na(data_2010$MEDIAN09))
 
 # Remove all fields with component test scores because this is what we're trying to find relationships for.
-data_2010 = remove_columns_like(data_2010, c("VCST_", "PCST_", "VCHS_", "PCHS", "CW_", "CWM2_", "CWS2_", "VCSTM2_", "PCSTM2_", "CWS_", "VCSTS2_", "PCSTS2_", "TOT_"))
 data_2010 = remove_columns(data_2010, c("API09", "TARGET", "GROWTH", "COMP_IMP", "MEDIAN10", "MEDIAN09", "SCH_WIDE"))
-
-data_2010 = remove_columns_like(data_2010, c("GRAD", "HSG", "SOME_COL"))
 
 # Remove columns with too many NA
 other_cols = show_columns_with_na(data_2010)
