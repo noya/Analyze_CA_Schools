@@ -19,7 +19,6 @@ The dataset tracks the school's name, district, type (charter or not), student d
 
 With the performance index as the response, we hope to model what predictors contribute to the performance of a school.
 
-TODO: combine text 
 
 ## The Data Source
 
