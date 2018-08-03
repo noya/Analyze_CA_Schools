@@ -28,7 +28,7 @@ We will Growth API score, coded in the data as "API<YY>", as a response variable
 **Loading the raw data**
 
 ```{r}
-data_2006 = read.dbf("api06gdb.dbf", as.is = TRUE)
+data_2006 = read.dbf("data/api06gdb.dbf", as.is = TRUE)
 dim(data_2006)
 ```
 ```{r eval=FALSE,include=FALSE}
@@ -44,18 +44,42 @@ remove_columns = function(dframe, columns_to_remove){
 ```
 ```{r}
 #Helper function to run diagnostics
-diagnostics = function(dframe, model, alpha = 0.05) {
-  p_val_bp = bptest(model)$p.value
-  decision_bp = ifelse(p_val_bp < alpha, "Fail BP test", "Pass BP test")
-  residuals = resid(model)
-  if(length(residuals) > 5000){
-    sample_idx = sample(nrow(dframe), 5000)
-    residuals = residuals[sample_idx]
+diagnostics = function(model, pcol = "grey", lcol = "dodgerblue", alpha = 0.05, 
+                       plotit = TRUE, testit = TRUE) {
+  if (plotit == TRUE) {
+    
+    # side-by-side plots (one row, two columns)
+    par(mfrow = c(1, 2))
+    
+    # fitted versus residuals
+    plot(fitted(model), resid(model), 
+         col = pcol, pch = 20, cex = 1.5, 
+         xlab = "Fitted", ylab = "Residuals", 
+         main = "Fitted versus Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    grid()
+    
+    # qq-plot
+    qqnorm(resid(model), col = pcol, pch = 20, cex = 1.5)
+    qqline(resid(model), col = lcol, lwd = 2)
+    grid()
   }
-  p_val_shapiro = shapiro.test(residuals)$p.value
-  decision_shapiro = ifelse(p_val_shapiro < alpha, "Fail Shapiro-Wilk test", "Pass Shapiro-Wilk test")
-  list(p_val_shapiro = p_val_shapiro, decision_shapiro = decision_shapiro, p_val_bp = p_val_bp, decision_bp = decision_bp)
+  
+  if (testit == TRUE) {
+    p_val_bp = bptest(model)$p.value
+    decision_bp = ifelse(p_val_bp < alpha, "Fail BP test", "Pass BP test")
+    
+    residuals = resid(model)
+    if(length(residuals) > 5000){
+      sample_idx = sample(length(residuals), 5000)
+      residuals = residuals[sample_idx]
+    }
+    p_val_shapiro = shapiro.test(residuals)$p.value
+    decision_shapiro = ifelse(p_val_shapiro < alpha, "Fail Shapiro-Wilk test", "Pass Shapiro-Wilk test")
+    list(p_val_shapiro = p_val_shapiro, decision_shapiro = decision_shapiro, p_val_bp = p_val_bp, decision_bp = decision_bp)
+  }
 }    
+    
 
 ```
 
@@ -123,10 +147,12 @@ str(data_2006)
 sapply(data_2006, function(x) mean (is.na(x)))
 
 ```
+
 ```{r}
 #There is a large percent of missing values in "Class size" variables, so we have to remove them.
 data_2006 = remove_columns(data_2006, c('ACS_'))
 ```
+
 
 ##Building a model##
 
@@ -135,9 +161,10 @@ Using backward BIC selection
 mod_full = lm(API06 ~ ., data = data_2006)
 mod_back_bic = step(mod_full, k = log(nrow(data_2006)), trace = 0)
 summary(mod_back_bic)
-diagnostics(data_2006, mod_back_bic)
+diagnostics(mod_back_bic)
 
 ```
+
 Performing Box-Cox transformation of the response
 ```{r}
 library( MASS )
@@ -150,7 +177,7 @@ mod_cox = lm((API06 ^ 2.1 - 1)/2.1 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH 
     CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
     FULL + EMER, data = data_2006)
 summary(mod_cox)
-diagnostics(data_2006, mod_cox)
+diagnostics(mod_cox)
 ```
 Removing influential observations
 
@@ -161,23 +188,36 @@ mod_new = lm((API06 ^ 2.1 - 1)/2.1 ~ PCT_AI + PCT_AS + PCT_HI + PCT_WH +
     CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
     FULL + EMER, data = data_2006, subset = cd < 4 / length(cd))
 summary(mod_new)
+diagnostics(mod_new)
 ```
 
-##Performing model diagnostics##
-
+#Weighted least squares regression
 ```{r}
-#Running diagnostics
-diagnostics(data_2006, mod_new)
+# Ordinary least-squares with no weights
+model1 = lm( API06 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + 
+    MEALS + P_FDAY + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + 
+    CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
+    FULL + EMER, data = data_2006 )
+diagnostics(model1, plotit = FALSE)
 
-par(mfrow = c(1, 2))
-qqnorm(resid(mod_new), col = "darkgrey")
-qqline(resid(mod_new), col = "coral", lwd = 2)
+# Estimate log of error variance from residuals^2
+# smooth.spline builds a smooth function var1$y that represents log( variance )
+var1 <- smooth.spline(x=model1$fitted.values, y=log( residuals(model1)^2 ), cv=TRUE)
 
-plot(fitted(mod_new), resid(mod_new), col = "darkgrey", pch = 20, xlab = "Fitted", ylab = "Residual", main = "Fitted vs. Residual Plot")
-abline(h = 0, col = "coral", lwd = 2)
+# Use 1/variance = 1/exp(var1$y) to define weights for weighted least-squares
+model2 = lm( API06 ~ PCT_AI + PCT_AS + PCT_FI + PCT_HI + PCT_WH + 
+    MEALS + P_FDAY + P_GATE + P_MIGED + P_EL + P_RFEP + P_DI + 
+    CBMOB + NOT_HSG + HSG + SOME_COL + GRAD_SCH + 
+    FULL + EMER, weights=1/exp( predict( var1, x=model1$fitted.values )$y ), data = data_2006 )
+summary(model2)
 
-#Checking for collinearity issues
-vif(mod_new)
+plot(fitted(model2), resid(model2) / sqrt( exp( predict( var1, x=model1$fitted.values )$y ) ), col = "darkgrey", pch = 20, xlab = "Fitted", ylab = "Residual", main = "Fitted vs. Residual Plot")
+
+diagnostics(model2, plotit = FALSE)
+summary(model1)$adj.r.squared
+summary(model2)$adj.r.squared
+
 
 ```
+
 
