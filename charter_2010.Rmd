@@ -1,5 +1,5 @@
 ---
-title: "Factor predicting school performance in California schools"
+title: "Study of academic performance predictors in California schools"
 author: "STAT 420, Summer 2018, Group 13: bching3, cindyst2, rjs8, trapido2"
 date: '07/30/2018'
 output:
@@ -295,7 +295,7 @@ data_2010 = conv_numeric(data_2010, num_columns)
 nrow(data_2010)
 ```
 
-We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid data, sample size of 350 gives us about 95% confidence with 5% of error of accurately representing the model.
+We have decided to draw 700 random samples from the entire data set because smaller samples are easier to explain. We then split these samples in half, 350 for training and 350 for testing. With a population size of roughly 7000 valid observations, the sample size of 350 gives us about 95% confidence with 5% of error of accurately representing the model.
 
 ```{r}
 grp_num = 13
@@ -403,7 +403,7 @@ abline(a = 0, b = 1, col = "darkorange", lwd = 3)
 
 We fit a model with 2010 API scores as the response. The model passes both bptest and shapiro test, so none of the assumptions are violated. 
 
-Looking at the `GVIF^(1/(2*Df))` column, we also see that none of the predictors have collinearity issue. 
+Looking at the `GVIF^(1/(2*Df))` column, we also see that none of the predictors have collinearity issues. 
 
 In this particular model, we see that the following predictors being significant  with a significance level of 0.05:
 
@@ -415,7 +415,7 @@ In this particular model, we see that the following predictors being significant
 - Percent of Student Answer Documents with Parent Education Level Information(PCT_RESP)
 - Percent of Students with Disabilities (P_DI)
 
-Amongst the predictors, the coefficients for any interaction term between parent's education level (AVG_ED) and family income (MEALS) are all postive. For the other polynomial predictors, first order term for percentage of asians (P_AS) have a high positive correlation, while the second order term it is negative. Conversely first order term for percentage of african americans (P_AA) have negative correlations while the second order term is positive. Lastly percentage of white is significant, however the effect seems minual (estimation is only `r coef(mod_2010)['PCT_WH']`)
+Amongst the predictors, the coefficients for any interaction term between parent's education level (AVG_ED) and family income (MEALS) are all postive. For the other polynomial predictors, first order term for percentage of asians (P_AS) have a high positive correlation, while the second order term  is negative. Conversely, first order term for percentage of african americans (P_AA) have negative correlation with the API score, while the second order term is positive. Lastly, the percentage of white students is significant, however the effect seems minual (estimation is only `r coef(mod_2010)['PCT_WH']`)
 
 We see that the percentage of students in gifted program (P_GATE) also has a positive relationship for the first order term (`r coef(mod_2010)['poly(P_GATE, 2)1']`) while P_DI has a slight negative correlation (`r coef(mod_2010)['log(P_DI)'] `).
 
@@ -425,11 +425,11 @@ We can probably hypothesize that parent's with higher education learn how to tea
 cor(data_2010_trn[, c("PCT_AS", "MEALS")])
 ```
 
-Again this model is not the only model that will fit. Since ethnicity have a collinearity issue (since all percentages add up to 100%), the model will pick a particular ethnicity depending on the data set. So these predictors are not obsolete. 
+Again, this model is not the only model that will fit. Since ethnicities pose a collinearity issue (since all percentages add up to 100%), the model selection algorithm will pick a particular ethnicity depending on the data set, so we cannot say with any degree of certainty which subset of ethnicities will be a more reliable predictor. 
 
-We see that this model also predicts the student's test score somewhat well in the 2007 data set.
+The model based on data from 2010 predicts academic performance in 2007 generally well but overestimates the actual API, especially for lower API values.
 
-In conclusion, it seems that the main factor affecting the student's test score are the family's background in education and income level. There doesn't seem much of an impact from school here. We see that there are no effects on whether the school is a charter school or not. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results simply are correlation and not causation.
+We can conclude that the main factors affecting the student's test scores are their family's socio-economic status (i.e., the parents' education and income levels), rather than factors related to the school itself. We see that Charter is not a significant factor in predicting the API score. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results suggest correlation, but not causation.
 
 
 ## Appendix
