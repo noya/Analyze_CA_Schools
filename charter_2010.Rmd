@@ -415,21 +415,21 @@ In this particular model, we see that the following predictors being significant
 - Percent of Student Answer Documents with Parent Education Level Information(PCT_RESP)
 - Percent of Students with Disabilities (P_DI)
 
-Amongst the predictors, the coefficients for any interaction term between parent's education level (AVG_ED) and family income (MEALS) are all postive. For the other polynomial predictors, first order term for percentage of asians (P_AS) have a high positive correlation, while the second order term  is negative. Conversely, first order term for percentage of african americans (P_AA) have negative correlations while the second order term is positive. Lastly, the percentage of white is significant, however the effect seems minual (estimation is only `r coef(mod_2010)['PCT_WH']`)
+Amongst the predictors, the coefficients for any interaction term between parent's education level (AVG_ED) and family income (MEALS) are all postive. For the other polynomial predictors, first order term for percentage of asians (P_AS) have a high positive correlation, while the second order term  is negative. Conversely, first order term for percentage of african americans (P_AA) have negative correlation with the API score, while the second order term is positive. Lastly, the percentage of white students is significant, however the effect seems minual (estimation is only `r coef(mod_2010)['PCT_WH']`)
 
 We see that the percentage of students in gifted program (P_GATE) also has a positive relationship for the first order term (`r coef(mod_2010)['poly(P_GATE, 2)1']`) while P_DI has a slight negative correlation (`r coef(mod_2010)['log(P_DI)'] `).
 
-We can probably hypothesize that parents with higher education learn how to teach the kids more, or, since parent education is highly tied to family income, that in higher income families parents have more time to spend with their children, hence ensuring the children's success in school. Lastly, we see that there is also high correlation of student's ethnicity. This may be due to the fact that Asian American families may have a higher income. We can see that there is negative correlation between Asian family and being economically disadvantaged. 
+We can probably hypothesize that parents with higher education learn how to teach the kids more, or, since parent education is highly tied to family income, that in higher-income families parents have more time to spend with their children, hence ensuring the children's success in school. Lastly, we see that the API score is highly dependent on the school's ethnic makeup. However, the relationship might be more complex: for example, we can see that there is also a negative correlation between  percentage of African Americans and percentage of students in the free meals program, suggesting that Asian Americans might have higher incomve on average. 
 
 ```{r}
 cor(data_2010_trn[, c("PCT_AS", "MEALS")])
 ```
 
-Again, this model is not the only model that will fit. Since ethnicities pose a collinearity issue (since all percentages add up to 100%), the model will pick a particular ethnicity depending on the data set. So these predictors are not obsolete. 
+Again, this model is not the only model that will fit. Since ethnicities pose a collinearity issue (since all percentages add up to 100%), the model selection algorithm will pick a particular ethnicity depending on the data set, so we cannot say with any degree of certainty which subset of ethnicities will be a more reliable predictor. 
 
 The model based on data from 2010 predicts academic performance in 2007 generally well but overestimates the actual API, especially for lower API values.
 
-In conclusion, it seems that the main factors affecting the student's test scores are the family's background in education and income level. There doesn't seem much of an impact from school here. We see that there are no effects on whether the school is a charter school or not. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results simply are correlation and not causation.
+We can conclude that the main factors affecting the student's test scores are their family's socio-economic status (i.e., the parents' education and income levels), rather than factors related to the school itself. We see that Charter is not a significant factor in predicting the API score. Perhaps instead of pushing for charter schools, the state department should focus on families with lower education or economically disadvantaged first. Finally, please note that these results suggest correlation, but not causation.
 
 
 ## Appendix
