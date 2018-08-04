@@ -419,7 +419,7 @@ Amongst the predictors, the coefficients for any interaction term between parent
 
 We see that the percentage of students in gifted program (P_GATE) also has a positive relationship for the first order term (`r coef(mod_2010)['poly(P_GATE, 2)1']`) while P_DI has a slight negative correlation (`r coef(mod_2010)['log(P_DI)'] `).
 
-We can probably hypothesize that parent's with higher education learn how to teach the kids more, or, since parent's education are highly tied with family economic income, that in higher income families parents' have more time to spend with their kids, and hence ensuring the kids success in school. Lastly we see that there is also high correlation of student's ethnicity. This may be due to the Asian's families seem to have a higher income. We can see that there's negative correlation between Asian family and being economically disadvantaged. 
+We can probably hypothesize that parent's with higher education learn how to teach the kids more, or, since parent's education are highly tied with family economic income, that in higher income families parents' have more time to spend with their kids, and hence ensuring the kids success in school. Lastly we see that there is also high correlation between student's ethnicity and API score. This may be due to the Asian's families seem to have a higher income. We can see that there's negative correlation between Asian family and being economically disadvantaged. 
 
 ```{r}
 cor(data_2010_trn[, c("PCT_AS", "MEALS")])
