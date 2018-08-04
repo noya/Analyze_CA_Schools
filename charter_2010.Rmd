@@ -1,5 +1,5 @@
 ---
-title: "Charter 2010"
+title: "Factor predicting school performance in California schools"
 author: "STAT 420, Summer 2018, Group 13: bching3, cindyst2, rjs8, trapido2"
 date: '07/30/2018'
 output:
